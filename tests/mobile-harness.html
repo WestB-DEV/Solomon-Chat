@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Solomon Chat mobile layout harness</title>
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    :root { --background-primary:#fff; --background-primary-alt:#f7f7f8; --background-secondary:#e9e9eb; --background-modifier-border:#dadade; --background-modifier-hover:#e8e8ec; --interactive-accent:#3478f6; --text-normal:#1c1c1e; --text-muted:#77777d; --text-faint:#97979d; --text-on-accent:#fff; --size-4-1:4px; --size-4-2:8px; --size-4-3:12px; --radius-l:12px; --radius-m:8px; --font-ui-smaller:12px; --font-ui-small:13px; }
+    * { box-sizing:border-box; }
+    body { background:#e4e4e7; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; margin:0; }
+    .harness { display:grid; grid-template-rows:auto 1fr; height:100vh; }
+    .harness-controls { align-items:center; background:#18181b; color:#fff; display:flex; font-size:12px; gap:8px; padding:8px; }
+    .harness-controls button { background:#3f3f46; border:0; border-radius:6px; color:#fff; padding:6px 10px; }
+    .harness-controls button[aria-pressed="true"] { background:#3478f6; }
+    .phone { background:var(--background-primary); height:100%; margin:auto; max-height:915px; max-width:430px; overflow:hidden; position:relative; width:100%; }
+    .view-content { display:flex; height:100%; overflow:hidden; }
+    .mobile-toolbar { align-items:center; background:#f5f5f7; border-top:1px solid #ddd; bottom:0; display:flex; height:54px; justify-content:space-around; left:0; position:absolute; right:0; z-index:10; }
+    .keyboard { background:linear-gradient(#d1d4da,#c5c8ce); bottom:0; display:none; height:334px; left:0; padding:12px 6px; position:absolute; right:0; z-index:12; }
+    .keyboard.is-open { display:block; }
+    .keyboard-row { display:flex; gap:5px; justify-content:center; margin-bottom:8px; }
+    .key { background:#fff; border-radius:5px; box-shadow:0 1px 1px #777; height:38px; width:31px; }
+    .keyboard-label { color:#555; font-size:11px; text-align:center; }
+    .solomon-chat-root { height:100%; width:100%; }
+    .solomon-chat-bubble p { margin:0; }
+    @media (prefers-color-scheme:dark) { body { background:#111; } }
+  </style>
+</head>
+<body>
+  <div class="harness">
+    <div class="harness-controls">
+      <strong id="device-label">iPhone 15</strong>
+      <button id="keyboard-toggle" aria-pressed="false">Open keyboard</button>
+      <span id="metrics"></span>
+    </div>
+    <main class="phone">
+      <div class="view-content solomon-chat-active">
+        <section class="solomon-chat-root" aria-label="Solomon Chat test conversation">
+          <header class="solomon-chat-header">
+            <div class="solomon-chat-people">
+              <button class="solomon-chat-person is-left"><span class="solomon-chat-initial">W</span><span>Wise Friend</span></button>
+              <span class="solomon-chat-title">A hard decision</span>
+              <button class="solomon-chat-person is-right"><span class="solomon-chat-initial">M</span><span>Me</span></button>
+            </div>
+            <div class="solomon-chat-actions"><button class="solomon-chat-icon">✦</button><button class="solomon-chat-icon">☰</button><button class="solomon-chat-icon">⌁</button></div>
+          </header>
+          <div class="solomon-chat-messages">
+            <article class="solomon-chat-message is-right"><div class="solomon-chat-meta">Me · 9:12 AM</div><div class="solomon-chat-bubble"><p>I keep going in circles about this decision.</p></div></article>
+            <article class="solomon-chat-message is-left"><div class="solomon-chat-meta">Wise Friend · 9:13 AM</div><div class="solomon-chat-bubble"><p>If a close friend brought you this problem, what would you tell them?</p></div></article>
+            <article class="solomon-chat-message is-right"><div class="solomon-chat-meta">Me · 9:14 AM</div><div class="solomon-chat-bubble"><p>I would tell them they do not need perfect certainty before taking one small step.</p></div></article>
+            <article class="solomon-chat-message is-left"><div class="solomon-chat-meta">Wise Friend · 9:15 AM</div><div class="solomon-chat-bubble"><p>What is one reversible step you could take today?</p></div></article>
+          </div>
+          <footer class="solomon-chat-composer"><button class="solomon-chat-sender">Me</button><textarea rows="1" placeholder="Message as Me"></textarea><button class="solomon-chat-icon">⌕</button><button class="solomon-chat-send">↑</button></footer>
+        </section>
+      </div>
+      <nav class="mobile-toolbar"><span>‹</span><span>⌘</span><span>＋</span><span>≡</span></nav>
+      <div class="keyboard"><div class="keyboard-row"><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i></div><div class="keyboard-row"><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i></div><div class="keyboard-row"><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i></div><div class="keyboard-label">simulated system keyboard</div></div>
+    </main>
+  </div>
+  <script src="mobile-harness.js"></script>
+</body>
+</html>
