@@ -47,7 +47,7 @@ var DEFAULT_SETTINGS = {
   conversationFolder: "Solomon Conversations",
   useThemeColors: true,
   leftBubbleColor: "#e9e9eb",
-  rightBubbleColor: "#3478f6",
+  rightBubbleColor: "#8b6cef",
   leftTextColor: "#1c1c1e",
   rightTextColor: "#ffffff",
   showTimestamps: true,
@@ -379,7 +379,7 @@ var SolomonChatPlugin = class extends import_obsidian3.Plugin {
     const host = leaf.view.containerEl.querySelector(".view-content") || leaf.view.contentEl;
     const root = host.createDiv({ cls: "solomon-chat-root" });
     const header = root.createDiv({ cls: "solomon-chat-header" });
-    const messages = root.createDiv({ cls: "solomon-chat-messages" });
+    const messages = root.createDiv({ cls: "solomon-chat-messages", attr: { role: "log", "aria-live": "polite", "aria-relevant": "additions" } });
     const composer = root.createDiv({ cls: "solomon-chat-composer" });
     const sender = composer.createEl("button", { cls: "solomon-chat-sender" });
     sender.type = "button";
@@ -448,7 +448,10 @@ var SolomonChatPlugin = class extends import_obsidian3.Plugin {
       void import_obsidian3.MarkdownRenderer.render(this.app, conversation.preamble, preamble, file.path, state.component);
     }
     if (!conversation.messages.length) this.renderEmptyState(state);
-    for (let index = 0; index < conversation.messages.length; index++) this.renderMessage(state, index);
+    for (let index = 0; index < conversation.messages.length; index++) {
+      const animate = !firstRender && conversation.messages.length > oldCount && index >= oldCount;
+      this.renderMessage(state, index, animate);
+    }
     state.lastMessageCount = conversation.messages.length;
     state.textarea.value = state.draft;
     state.send.disabled = state.sending || !state.draft.trim();
@@ -495,9 +498,9 @@ var SolomonChatPlugin = class extends import_obsidian3.Plugin {
     const prompt = empty.createEl("button", { text: "Use a perspective prompt" });
     prompt.addEventListener("click", () => this.openPromptMenu(state));
   }
-  renderMessage(state, index) {
+  renderMessage(state, index, animate = false) {
     const message = state.conversation.messages[index];
-    const wrapper = state.messages.createDiv({ cls: `solomon-chat-message is-${message.side}` });
+    const wrapper = state.messages.createDiv({ cls: `solomon-chat-message is-${message.side}${animate ? " is-entering" : ""}` });
     const name = message.side === "left" ? state.conversation.leftName : state.conversation.rightName;
     if (this.settings.showTimestamps) wrapper.createDiv({ cls: "solomon-chat-meta", text: message.timestamp ? `${name} \xB7 ${this.formatTimestamp(message.timestamp)}` : name });
     const bubble = wrapper.createDiv({ cls: "solomon-chat-bubble", attr: { tabindex: "0" } });

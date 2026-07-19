@@ -114,7 +114,7 @@ export default class SolomonChatPlugin extends Plugin {
     const host = leaf.view.containerEl.querySelector<HTMLElement>(".view-content") || leaf.view.contentEl;
     const root = host.createDiv({ cls: "solomon-chat-root" });
     const header = root.createDiv({ cls: "solomon-chat-header" });
-    const messages = root.createDiv({ cls: "solomon-chat-messages" });
+    const messages = root.createDiv({ cls: "solomon-chat-messages", attr: { role: "log", "aria-live": "polite", "aria-relevant": "additions" } });
     const composer = root.createDiv({ cls: "solomon-chat-composer" });
     const sender = composer.createEl("button", { cls: "solomon-chat-sender" }); sender.type = "button";
     const textarea = composer.createEl("textarea", { attr: { rows: "1", enterkeyhint: "send", autocapitalize: "sentences", placeholder: "Write a message…" } });
@@ -160,7 +160,10 @@ export default class SolomonChatPlugin extends Plugin {
       void MarkdownRenderer.render(this.app, conversation.preamble, preamble, file.path, state.component);
     }
     if (!conversation.messages.length) this.renderEmptyState(state);
-    for (let index = 0; index < conversation.messages.length; index++) this.renderMessage(state, index);
+    for (let index = 0; index < conversation.messages.length; index++) {
+      const animate = !firstRender && conversation.messages.length > oldCount && index >= oldCount;
+      this.renderMessage(state, index, animate);
+    }
     state.lastMessageCount = conversation.messages.length;
     state.textarea.value = state.draft;
     state.send.disabled = state.sending || !state.draft.trim();
@@ -211,9 +214,9 @@ export default class SolomonChatPlugin extends Plugin {
     prompt.addEventListener("click", () => this.openPromptMenu(state));
   }
 
-  private renderMessage(state: ViewState, index: number): void {
+  private renderMessage(state: ViewState, index: number, animate = false): void {
     const message = state.conversation.messages[index];
-    const wrapper = state.messages.createDiv({ cls: `solomon-chat-message is-${message.side}` });
+    const wrapper = state.messages.createDiv({ cls: `solomon-chat-message is-${message.side}${animate ? " is-entering" : ""}` });
     const name = message.side === "left" ? state.conversation.leftName : state.conversation.rightName;
     if (this.settings.showTimestamps) wrapper.createDiv({ cls: "solomon-chat-meta", text: message.timestamp ? `${name} · ${this.formatTimestamp(message.timestamp)}` : name });
     const bubble = wrapper.createDiv({ cls: "solomon-chat-bubble", attr: { tabindex: "0" } });

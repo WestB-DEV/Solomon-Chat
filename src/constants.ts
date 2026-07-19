@@ -32,7 +32,7 @@ export const DEFAULT_SETTINGS: SolomonSettings = {
   conversationFolder: "Solomon Conversations",
   useThemeColors: true,
   leftBubbleColor: "#e9e9eb",
-  rightBubbleColor: "#3478f6",
+  rightBubbleColor: "#8b6cef",
   leftTextColor: "#1c1c1e",
   rightTextColor: "#ffffff",
   showTimestamps: true,

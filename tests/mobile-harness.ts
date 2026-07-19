@@ -4,6 +4,7 @@ const query = new URLSearchParams(location.search);
 const android = query.get("device") === "android";
 const desktop = query.get("device") === "desktop";
 const capture = query.get("capture") === "1";
+const dark = query.get("theme") === "dark";
 const keyboardHeight = android ? 355 : 334;
 const deviceHeight = android ? 915 : 844;
 const toolbarHeight = android ? 56 : 54;
@@ -16,6 +17,7 @@ const metrics = document.querySelector<HTMLElement>("#metrics")!;
 document.body.classList.toggle("is-capture", capture);
 document.body.classList.toggle("is-desktop", desktop);
 document.body.classList.toggle("is-phone-capture", capture && !desktop);
+document.body.classList.toggle("theme-dark", dark);
 document.querySelector<HTMLElement>("#device-label")!.textContent = desktop ? "Desktop" : android ? "Pixel 9" : "iPhone 15";
 let open = query.get("keyboard") === "open";
 
