@@ -8,21 +8,40 @@
   <style>
     :root { --background-primary:#fff; --background-primary-alt:#f7f7f8; --background-secondary:#e9e9eb; --background-modifier-border:#dadade; --background-modifier-hover:#e8e8ec; --interactive-accent:#3478f6; --text-normal:#1c1c1e; --text-muted:#77777d; --text-faint:#97979d; --text-on-accent:#fff; --size-4-1:4px; --size-4-2:8px; --size-4-3:12px; --radius-l:12px; --radius-m:8px; --font-ui-smaller:12px; --font-ui-small:13px; }
     * { box-sizing:border-box; }
-    body { background:#e4e4e7; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; margin:0; }
+    body { background:#dddde2; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; margin:0; }
     .harness { display:grid; grid-template-rows:auto 1fr; height:100vh; }
     .harness-controls { align-items:center; background:#18181b; color:#fff; display:flex; font-size:12px; gap:8px; padding:8px; }
     .harness-controls button { background:#3f3f46; border:0; border-radius:6px; color:#fff; padding:6px 10px; }
     .harness-controls button[aria-pressed="true"] { background:#3478f6; }
+    .workspace { display:flex; height:100%; margin:auto; overflow:hidden; width:100%; }
+    .desktop-sidebar { background:#f3f3f5; border-right:1px solid #d2d2d7; color:#5f5f66; display:none; flex:0 0 252px; padding:18px 14px; }
+    .desktop-sidebar strong { color:#242429; display:block; font-size:14px; margin:4px 8px 20px; }
+    .desktop-sidebar h2 { font-size:11px; letter-spacing:.08em; margin:24px 8px 8px; text-transform:uppercase; }
+    .desktop-sidebar div { border-radius:6px; font-size:13px; margin:2px 0; padding:7px 9px; }
+    .desktop-sidebar .is-active { background:#dedee4; color:#242429; font-weight:600; }
     .phone { background:var(--background-primary); height:100%; margin:auto; max-height:915px; max-width:430px; overflow:hidden; position:relative; width:100%; }
+    .desktop-titlebar { align-items:center; background:#fafafa; border-bottom:1px solid #dedee2; color:#6b6b72; display:none; font-size:12px; height:42px; justify-content:space-between; padding:0 16px; }
     .view-content { display:flex; height:100%; overflow:hidden; }
     .mobile-toolbar { align-items:center; background:#f5f5f7; border-top:1px solid #ddd; bottom:0; display:flex; height:54px; justify-content:space-around; left:0; position:absolute; right:0; z-index:10; }
     .keyboard { background:linear-gradient(#d1d4da,#c5c8ce); bottom:0; display:none; height:334px; left:0; padding:12px 6px; position:absolute; right:0; z-index:12; }
     .keyboard.is-open { display:block; }
     .keyboard-row { display:flex; gap:5px; justify-content:center; margin-bottom:8px; }
-    .key { background:#fff; border-radius:5px; box-shadow:0 1px 1px #777; height:38px; width:31px; }
+    .key { align-items:center; background:#fff; border-radius:5px; box-shadow:0 1px 1px #777; color:#202024; display:flex; font-size:16px; font-style:normal; height:38px; justify-content:center; width:31px; }
     .keyboard-label { color:#555; font-size:11px; text-align:center; }
     .solomon-chat-root { height:100%; width:100%; }
     .solomon-chat-bubble p { margin:0; }
+    body.is-capture .harness { grid-template-rows:1fr; }
+    body.is-capture .harness-controls { display:none; }
+    body.is-desktop .workspace { box-shadow:0 22px 55px #17171a38; height:calc(100% - 56px); margin:28px; max-width:1320px; }
+    body.is-desktop .desktop-sidebar, body.is-desktop .desktop-titlebar { display:block; }
+    body.is-desktop .desktop-titlebar { display:flex; }
+    body.is-desktop .phone { max-height:none; max-width:none; }
+    body.is-desktop .view-content { height:calc(100% - 42px); }
+    body.is-desktop .mobile-toolbar, body.is-desktop .keyboard { display:none !important; }
+    body.is-phone-capture { background:#ececf0; padding:22px; }
+    body.is-phone-capture .harness { height:calc(100vh - 44px); }
+    body.is-phone-capture .workspace { border:8px solid #1d1d20; border-radius:34px; box-shadow:0 18px 45px #17171a40; max-width:406px; }
+    body.is-phone-capture .phone { border-radius:25px; }
     @media (prefers-color-scheme:dark) { body { background:#111; } }
   </style>
 </head>
@@ -33,12 +52,24 @@
       <button id="keyboard-toggle" aria-pressed="false">Open keyboard</button>
       <span id="metrics"></span>
     </div>
-    <main class="phone">
+    <div class="workspace">
+      <aside class="desktop-sidebar" aria-label="Obsidian file explorer">
+        <strong>Solomon Journal</strong>
+        <h2>Files</h2>
+        <div>Daily Notes</div>
+        <div class="is-active">A hard decision.md</div>
+        <div>Weekly Review.md</div>
+        <h2>Solomon Conversations</h2>
+        <div>Career direction.md</div>
+        <div>What matters now.md</div>
+      </aside>
+      <main class="phone">
+      <div class="desktop-titlebar"><span>A hard decision.md</span><span>Reading view&nbsp;&nbsp;⋯</span></div>
       <div class="view-content solomon-chat-active">
         <section class="solomon-chat-root" aria-label="Solomon Chat test conversation">
           <header class="solomon-chat-header">
             <div class="solomon-chat-people">
-              <button class="solomon-chat-person is-left"><span class="solomon-chat-initial">W</span><span>Wise Friend</span></button>
+              <button class="solomon-chat-person is-left"><span class="solomon-chat-initial">S</span><span>Solomon</span></button>
               <span class="solomon-chat-title">A hard decision</span>
               <button class="solomon-chat-person is-right"><span class="solomon-chat-initial">M</span><span>Me</span></button>
             </div>
@@ -46,16 +77,18 @@
           </header>
           <div class="solomon-chat-messages">
             <article class="solomon-chat-message is-right"><div class="solomon-chat-meta">Me · 9:12 AM</div><div class="solomon-chat-bubble"><p>I keep going in circles about this decision.</p></div></article>
-            <article class="solomon-chat-message is-left"><div class="solomon-chat-meta">Wise Friend · 9:13 AM</div><div class="solomon-chat-bubble"><p>If a close friend brought you this problem, what would you tell them?</p></div></article>
+            <article class="solomon-chat-message is-left"><div class="solomon-chat-meta">Solomon · 9:13 AM</div><div class="solomon-chat-bubble"><p>If a close friend brought you this problem, what would you tell them?</p></div></article>
             <article class="solomon-chat-message is-right"><div class="solomon-chat-meta">Me · 9:14 AM</div><div class="solomon-chat-bubble"><p>I would tell them they do not need perfect certainty before taking one small step.</p></div></article>
-            <article class="solomon-chat-message is-left"><div class="solomon-chat-meta">Wise Friend · 9:15 AM</div><div class="solomon-chat-bubble"><p>What is one reversible step you could take today?</p></div></article>
+            <article class="solomon-chat-message is-left"><div class="solomon-chat-meta">Solomon · 9:15 AM</div><div class="solomon-chat-bubble"><p>What is one reversible step you could take today?</p></div></article>
+            <article class="solomon-chat-message is-right"><div class="solomon-chat-meta">Me · 9:16 AM</div><div class="solomon-chat-bubble"><p>I can write the first page, send it to one person I trust, and learn from their reaction.</p></div></article>
           </div>
           <footer class="solomon-chat-composer"><button class="solomon-chat-sender">Me</button><textarea rows="1" placeholder="Message as Me"></textarea><button class="solomon-chat-icon">⌕</button><button class="solomon-chat-send">↑</button></footer>
         </section>
       </div>
       <nav class="mobile-toolbar"><span>‹</span><span>⌘</span><span>＋</span><span>≡</span></nav>
-      <div class="keyboard"><div class="keyboard-row"><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i></div><div class="keyboard-row"><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i></div><div class="keyboard-row"><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i><i class="key"></i></div><div class="keyboard-label">simulated system keyboard</div></div>
-    </main>
+      <div class="keyboard"><div class="keyboard-row"><i class="key">Q</i><i class="key">W</i><i class="key">E</i><i class="key">R</i><i class="key">T</i><i class="key">Y</i><i class="key">U</i><i class="key">I</i><i class="key">O</i><i class="key">P</i></div><div class="keyboard-row"><i class="key">A</i><i class="key">S</i><i class="key">D</i><i class="key">F</i><i class="key">G</i><i class="key">H</i><i class="key">J</i><i class="key">K</i><i class="key">L</i></div><div class="keyboard-row"><i class="key">Z</i><i class="key">X</i><i class="key">C</i><i class="key">V</i><i class="key">B</i><i class="key">N</i><i class="key">M</i></div><div class="keyboard-label">simulated iPhone keyboard for layout testing</div></div>
+      </main>
+    </div>
   </div>
   <script src="mobile-harness.js"></script>
 </body>

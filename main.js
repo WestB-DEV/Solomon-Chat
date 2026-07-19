@@ -704,9 +704,9 @@ ${insertion}` : insertion;
   async exportTranscript(file) {
     const content = await this.app.vault.read(file);
     const conversation = parseConversation(content, this.frontmatterFor(file), { leftName: this.settings.defaultLeftName, rightName: this.settings.defaultRightName, attachmentFolder: this.defaultAttachmentFolder(file) });
-    const text = conversation.messages.map((message) => `${message.side === "left" ? conversation.leftName : conversation.rightName}${message.timestamp ? ` \u2014 ${message.timestamp}` : ""}
+    const text = conversation.messages.map((message) => `${message.side === "left" ? conversation.leftName : conversation.rightName}${message.timestamp ? ` - ${message.timestamp}` : ""}
 ${message.content}`).join("\n\n");
-    const path = await this.availablePath(this.parentPath(file.path), `${file.basename} \u2014 Transcript`, ".txt");
+    const path = await this.availablePath(this.parentPath(file.path), `${file.basename} - Transcript`, ".txt");
     await this.app.vault.create(path, `${text}
 `);
     new import_obsidian3.Notice(`Transcript saved to ${path}`);

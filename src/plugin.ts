@@ -363,8 +363,8 @@ export default class SolomonChatPlugin extends Plugin {
   private async exportTranscript(file: TFile): Promise<void> {
     const content = await this.app.vault.read(file);
     const conversation = parseConversation(content, this.frontmatterFor(file), { leftName: this.settings.defaultLeftName, rightName: this.settings.defaultRightName, attachmentFolder: this.defaultAttachmentFolder(file) });
-    const text = conversation.messages.map((message) => `${message.side === "left" ? conversation.leftName : conversation.rightName}${message.timestamp ? ` — ${message.timestamp}` : ""}\n${message.content}`).join("\n\n");
-    const path = await this.availablePath(this.parentPath(file.path), `${file.basename} — Transcript`, ".txt");
+    const text = conversation.messages.map((message) => `${message.side === "left" ? conversation.leftName : conversation.rightName}${message.timestamp ? ` - ${message.timestamp}` : ""}\n${message.content}`).join("\n\n");
+    const path = await this.availablePath(this.parentPath(file.path), `${file.basename} - Transcript`, ".txt");
     await this.app.vault.create(path, `${text}\n`); new Notice(`Transcript saved to ${path}`);
   }
 
