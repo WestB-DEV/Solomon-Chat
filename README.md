@@ -87,15 +87,29 @@ Images and files use ordinary Markdown links. Participant names, bios, and avata
 - Serialized file writes so rapid sends cannot overwrite one another
 - No account, analytics, AI API, or network transmission
 
-## Install for development
+## Install
 
-Solomon Chat is currently in private development and has not yet been submitted to the Obsidian community plugin directory.
+### Obsidian Community Plugins
+
+Once the community listing is approved:
+
+1. Open **Settings > Community plugins** in Obsidian.
+2. Select **Browse** and search for **Solomon Chat**.
+3. Select **Install**, then **Enable**.
+
+### Manual installation
+
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/WestB-DEV/Solomon-Chat/releases/latest).
+2. Place the three files in `<your-vault>/.obsidian/plugins/solomon-chat/`.
+3. Open **Settings > Community plugins** and enable **Solomon Chat**.
+
+## Development
 
 1. Run `npm install` and `npm run build`.
 2. Copy or symlink this directory into a test vault at `.obsidian/plugins/solomon-chat`.
 3. Enable **Solomon Chat** under Obsidian > Settings > Community plugins.
 
-The release files Obsidian needs are `main.js`, `manifest.json`, and `styles.css`. Use a dedicated test vault while developing plugins.
+Use a dedicated test vault while developing plugins.
 
 See [TESTING.md](TESTING.md) for the mobile harness, recorded layout geometry, and the physical-device launch checklist.
 
