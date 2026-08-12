@@ -8,7 +8,14 @@ export const FM = {
   rightBio: "right-bio",
   leftAvatar: "left-avatar",
   rightAvatar: "right-avatar",
+  conversationId: "conversation-id",
+  segmentIndex: "segment-index",
+  previousSegment: "previous-segment",
+  nextSegment: "next-segment",
 } as const;
+
+export const SOFT_ROLLOVER_BYTES = 250 * 1024;
+export const SOFT_ROLLOVER_MESSAGES = 2_000;
 
 export type Side = "left" | "right";
 

@@ -10,6 +10,21 @@ describe("mobile viewport layout", () => {
     expect(calculateViewportLayout({ mobile: true, focused: true, layoutHeight: 844, visualHeight: 510, visualOffsetTop: 0, containerBottom: 790, closedToolbarClearance: 54 })).toEqual({ keyboardOpen: true, composeMode: true, bottomClearance: 280 });
   });
 
+  it("does not cap a short iPhone landscape keyboard at half the container", () => {
+    expect(calculateViewportLayout({ mobile: true, focused: true, layoutHeight: 390, visualHeight: 145, visualOffsetTop: 0, containerBottom: 360, closedToolbarClearance: 44 }).bottomClearance).toBe(215);
+  });
+
+  it("recomputes cleanly over repeated open-close and rotation samples", () => {
+    const samples = [
+      { focused: true, layoutHeight: 844, visualHeight: 510, containerBottom: 790 },
+      { focused: false, layoutHeight: 844, visualHeight: 844, containerBottom: 790 },
+      { focused: true, layoutHeight: 390, visualHeight: 145, containerBottom: 360 },
+      { focused: false, layoutHeight: 390, visualHeight: 390, containerBottom: 360 },
+      { focused: true, layoutHeight: 844, visualHeight: 510, containerBottom: 790 },
+    ].map((sample) => calculateViewportLayout({ mobile: true, visualOffsetTop: 0, closedToolbarClearance: 44, ...sample }));
+    expect(samples.map((sample) => sample.bottomClearance)).toEqual([280, 44, 215, 44, 280]);
+  });
+
   it("handles an Android visual viewport offset", () => {
     expect(calculateViewportLayout({ mobile: true, focused: true, layoutHeight: 915, visualHeight: 560, visualOffsetTop: 24, containerBottom: 870, closedToolbarClearance: 56 })).toEqual({ keyboardOpen: true, composeMode: true, bottomClearance: 286 });
   });
