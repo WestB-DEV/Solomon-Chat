@@ -67,4 +67,11 @@
 ### Round 8 — `1.1.0-beta.9`
 
 - Builder target: convert the host keyboard height into actual keyboard/leaf intersection, combine it with VisualViewport clearance via `max()`, and suppress safe-area bottom padding only while the keyboard is confirmed open.
-- Status: implementation in progress.
+- Artifact SHA-256: `a5b014572f1dea80ddef5dc5a16a73e3809708b1cccb8a7c085a12b2b29fa14e`.
+- Commit: `98a4dcfa27ceab4f1c4c192a271dd9fca95fa4c0`.
+- Deterministic checks: lint (zero errors, one pre-existing settings-search warning), 25 tests, typecheck, and production build passed.
+- Exact Android identity: the beta.9 artifact was installed into Obsidian 1.13.6 on Android 15 and its staged `main.js`, `manifest.json`, and `styles.css` were hashed on-device.
+- Android geometry: full docked Gboard remained visible in portrait and landscape; the long draft survived keyboard dismissal, reopen, and rotation; speaker, attachment, textarea, and send controls remained visible, reachable, and non-overlapping. The prior beta.8 blank band was removed by reserving only actual host/keyboard intersection.
+- Exact attachment flow: one native picker entry produced one selected chip and one draft link; one send produced one `Me` message with stable ID `msg-27b85d5c-fbf6-4521-babb-aa69dedea0de` and exactly one durable Markdown link to `attachment-fixture%206.txt`.
+- Cross-platform scope: the fix is container-relative rather than Android-offset-specific, and safe-area bottom padding is suppressed only while the keyboard is confirmed open. Physical iPhone testing remains a separate release gate.
+- Status: exact evidence frozen; independent final critique pending.
