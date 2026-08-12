@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { calculateViewportLayout } from "../src/viewport";
+import { calculateNativeKeyboardOcclusion, calculateViewportLayout } from "../src/viewport";
 
 describe("mobile viewport layout", () => {
+  it("does not double-count a native keyboard after the host leaf has already resized", () => {
+    expect(calculateNativeKeyboardOcclusion(480, 807, 327)).toBe(0);
+  });
+
+  it("reserves only the native keyboard portion that intersects an unresized leaf", () => {
+    expect(calculateNativeKeyboardOcclusion(807, 807, 327)).toBe(327);
+    expect(calculateNativeKeyboardOcclusion(650, 807, 327)).toBe(170);
+  });
   it("uses native toolbar clearance when the keyboard is closed", () => {
     expect(calculateViewportLayout({ mobile: true, focused: false, layoutHeight: 844, visualHeight: 844, visualOffsetTop: 0, containerBottom: 790, closedToolbarClearance: 54 })).toEqual({ keyboardOpen: false, composeMode: false, bottomClearance: 54 });
   });

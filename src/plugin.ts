@@ -7,7 +7,7 @@ import { draftKey, moveDraft, normalizeDraftEnvelope, upsertDraft, type DraftEnv
 import { FormModal } from "./modals";
 import { applySend, createStableId, currentTimestamp, ensureMessageIds, parseConversation, replaceMessageById, type Conversation } from "./model";
 import { SolomonSettingsTab } from "./settings";
-import { calculateViewportLayout } from "./viewport";
+import { calculateNativeKeyboardOcclusion, calculateViewportLayout } from "./viewport";
 
 interface ViewState {
   leaf: WorkspaceLeaf;
@@ -534,8 +534,9 @@ export default class SolomonChatPlugin extends Plugin {
     const closedToolbarClearance = Platform.isMobile ? this.measureBottomToolbar(state.root) : 0;
     const layout = calculateViewportLayout({ mobile: Platform.isMobile, focused, layoutHeight: window.innerHeight, visualHeight: vv?.height || window.innerHeight, visualOffsetTop: vv?.offsetTop || 0, containerBottom: rect.bottom, closedToolbarClearance });
     const nativeKeyboardOpen = focused && this.nativeKeyboardVisible && this.nativeKeyboardHeight > 0;
+    const nativeOcclusion = nativeKeyboardOpen ? calculateNativeKeyboardOcclusion(rect.bottom, window.innerHeight, this.nativeKeyboardHeight) : 0;
     state.root.classList.toggle("is-compose-mode", layout.composeMode || nativeKeyboardOpen); state.root.classList.toggle("is-keyboard-open", layout.keyboardOpen || nativeKeyboardOpen);
-    state.root.style.setProperty("--solomon-bottom-clearance", `${nativeKeyboardOpen ? this.nativeKeyboardHeight : layout.bottomClearance}px`);
+    state.root.style.setProperty("--solomon-bottom-clearance", `${Math.max(layout.bottomClearance, nativeOcclusion)}px`);
   }
 
   private measureBottomToolbar(root: HTMLElement): number {

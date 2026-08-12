@@ -61,4 +61,10 @@
 
 - Builder target: observe Obsidian's actual content host for size changes so the bounded plugin shell recomputes from container and VisualViewport geometry on both Android and iOS.
 - Cross-platform architecture: the leaf owns a `min-height: 0; overflow: hidden` grid; only the transcript scrolls; the composer remains in normal flow. VisualViewport `resize` and `scroll` drive the universal visible-rectangle calculation. Safe-area values are applied once at the shell. Capacitor keyboard height remains an isolated mobile-host fallback when the embedded Android WebView does not expose the keyboard shrink through VisualViewport; there are no fixed keyboard offsets.
+- Android result: exact one-selection attachment return/send/persist passed after a controlled rerun. The earlier duplicate-link observation was caused by the test driver entering the picker twice, not a single app interaction.
+- Independent architecture audit: **FAIL — P1.** The native keyboard adapter applied full keyboard height even after the Obsidian host leaf had already resized, producing a large empty band above Gboard and a likely iOS double-compensation failure.
+
+### Round 8 — `1.1.0-beta.9`
+
+- Builder target: convert the host keyboard height into actual keyboard/leaf intersection, combine it with VisualViewport clearance via `max()`, and suppress safe-area bottom padding only while the keyboard is confirmed open.
 - Status: implementation in progress.

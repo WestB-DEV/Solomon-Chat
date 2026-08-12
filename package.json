@@ -1,6 +1,6 @@
 {
   "name": "solomon-chat",
-  "version": "1.1.0-beta.8",
+  "version": "1.1.0-beta.9",
   "private": true,
   "description": "An Obsidian-native, Markdown-first two-sided journaling chat.",
   "main": "main.js",
