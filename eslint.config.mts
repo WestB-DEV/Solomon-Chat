@@ -10,6 +10,8 @@ export default defineConfig(
     "esbuild.config.mjs",
     "main.js",
     "tests/mobile-harness.js",
+    "android-staging",
+    "scripts/android-cdp.mjs",
     "package-lock.json",
     "versions.json",
   ]),

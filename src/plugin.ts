@@ -505,10 +505,14 @@ export default class SolomonChatPlugin extends Plugin {
 
   private measureBottomToolbar(root: HTMLElement): number {
     const rect = root.getBoundingClientRect(); let top = rect.bottom;
-    for (const element of document.elementsFromPoint(Math.max(8, rect.left + rect.width / 2), Math.max(8, window.innerHeight - 12))) {
-      if (!element.instanceOf(HTMLElement) || root.contains(element) || element.contains(root)) continue;
-      const style = getComputedStyle(element); if (style.position !== "fixed" && style.position !== "sticky") continue;
-      const candidate = element.getBoundingClientRect(); if (candidate.bottom >= window.innerHeight - 4) top = Math.min(top, candidate.top);
+    // Obsidian's floating mobile navbar ends above the Android gesture inset, so
+    // sample progressively farther into the viewport instead of only its last pixels.
+    for (const y of [window.innerHeight - 12, window.innerHeight - 40, window.innerHeight - 72]) {
+      for (const element of document.elementsFromPoint(Math.max(8, rect.left + rect.width / 2), Math.max(8, y))) {
+        if (!element.instanceOf(HTMLElement) || root.contains(element) || element.contains(root)) continue;
+        const style = getComputedStyle(element); if (style.position !== "fixed" && style.position !== "sticky") continue;
+        const candidate = element.getBoundingClientRect(); if (candidate.bottom > rect.top && candidate.top < rect.bottom) top = Math.min(top, candidate.top);
+      }
     }
     return Math.max(0, Math.round(rect.bottom - top + (top < rect.bottom ? 6 : 0)));
   }
