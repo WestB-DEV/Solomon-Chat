@@ -40,10 +40,10 @@
 - Artifact SHA-256: `e04f7ac7e29c8e000371def3e65df1b86bc8995fa02256d1ef07244e96741d06`.
 - Commit: `33b1adc90058a31d325f24020e761fa09c88f1c0`.
 - Deterministic checks: lint (zero errors, one pre-existing settings-search warning), 23 tests, typecheck, and production build passed.
-- Android result: actual Obsidian 1.13.6 and visible Gboard passed portrait/landscape open, dismiss, reopen, and rotation. The compact attachment tray, draft, speaker selector, attach, and send controls all remained visible above Gboard. Closed-state composer/nav overlap measured zero and hit testing stayed within Solomon.
-- Persistence result: exact beta.5 long draft survived the closed/reopen cycle and sent as `Me` with stable ID `msg-bfe4a6a5-aa16-4a6c-9fc1-9fa4a2b26e3e`.
-- Independent critic: **PASS — no P0/P1 remains in the Android emulator matrix.** Physical iPhone and Boox checks remain separate release gates.
+- Android result: landscape attachment keyboard-open passed, and exact beta.5 persistence/attribution passed.
+- Independent critic: **FAIL — P1.** Portrait keyboard-open squeezed the no-attachment textarea into an unusably narrow column.
 
-## Final verdict
+### Round 5 — `1.1.0-beta.6`
 
-**PASS — Android visual gauntlet complete.** The Android 15 emulator remains open in Obsidian for West's hands-on review. No public push or release was performed.
+- Builder target: place the portrait keyboard-open speaker selector on its own row, preserving a usable textarea width while avoiding Obsidian's floating control.
+- Status: implementation in progress.
