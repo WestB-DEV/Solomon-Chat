@@ -142,6 +142,10 @@
   .solomon-chat-root.is-keyboard-open { transition: none; }
 }
 
+@media (orientation: landscape) and (max-height: 500px) {
+  .solomon-chat-root.is-keyboard-open .solomon-chat-composer textarea { max-height: 48px; }
+}
+
 .solomon-chat-mobile-modal input, .solomon-chat-mobile-modal textarea { font-size: 16px; }
 .solomon-chat-mobile-modal .modal-button-container { background: var(--background-primary); bottom: 0; padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)); position: sticky; z-index: 2; }
 

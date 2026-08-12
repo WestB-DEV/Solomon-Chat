@@ -42,6 +42,13 @@ interface ViewState {
 
 type Frontmatter = Record<string, unknown>;
 
+interface NativeKeyboardInfo { keyboardHeight?: number }
+interface NativeKeyboardListener { remove: () => Promise<void> }
+interface NativeKeyboardPlugin {
+  addListener: (event: "keyboardDidShow" | "keyboardDidHide", callback: (info: NativeKeyboardInfo) => void) => Promise<NativeKeyboardListener>;
+}
+interface CapacitorWindow extends Window { Capacitor?: { Plugins?: { Keyboard?: NativeKeyboardPlugin } } }
+
 export default class SolomonChatPlugin extends Plugin {
   settings: SolomonSettings = { ...DEFAULT_SETTINGS };
   private states = new Map<WorkspaceLeaf, ViewState>();
@@ -50,6 +57,8 @@ export default class SolomonChatPlugin extends Plugin {
   private refreshTokens = new WeakMap<WorkspaceLeaf, number>();
   private viewportFrame = 0;
   private viewportTimer = 0;
+  private nativeKeyboardHeight = 0;
+  private nativeKeyboardVisible = false;
   private draftTimer = 0;
   private drafts: DraftEnvelope = { version: 1, drafts: {} };
   private draftSaveQueue: Promise<void> = Promise.resolve();
@@ -83,6 +92,7 @@ export default class SolomonChatPlugin extends Plugin {
       window.visualViewport.addEventListener("scroll", update);
       this.register(() => { window.visualViewport?.removeEventListener("resize", update); window.visualViewport?.removeEventListener("scroll", update); });
     }
+    this.registerNativeKeyboard();
     this.app.workspace.onLayoutReady(() => this.scheduleAll());
   }
 
@@ -493,14 +503,36 @@ export default class SolomonChatPlugin extends Plugin {
     window.clearTimeout(this.viewportTimer); this.viewportTimer = window.setTimeout(() => { this.viewportTimer = 0; for (const state of this.states.values()) this.applyViewport(state); }, 160);
   }
 
+  private registerNativeKeyboard(): void {
+    const keyboard = (window as CapacitorWindow).Capacitor?.Plugins?.Keyboard;
+    if (!Platform.isMobile || !keyboard) return;
+    const listen = async (event: "keyboardDidShow" | "keyboardDidHide", callback: (info: NativeKeyboardInfo) => void): Promise<void> => {
+      try {
+        const handle = await keyboard.addListener(event, callback);
+        this.register(() => { void handle.remove(); });
+      } catch (error) { console.error(`Solomon Chat: failed to register ${event}`, error); }
+    };
+    void listen("keyboardDidShow", (info) => {
+      this.nativeKeyboardVisible = true;
+      this.nativeKeyboardHeight = Math.max(0, Math.round(info.keyboardHeight || 0));
+      this.scheduleViewport();
+    });
+    void listen("keyboardDidHide", () => {
+      this.nativeKeyboardVisible = false;
+      this.nativeKeyboardHeight = 0;
+      this.scheduleViewport();
+    });
+  }
+
   private applyViewport(state: ViewState): void {
     if (!state.root.isConnected) return;
     const vv = window.visualViewport; const rect = state.root.getBoundingClientRect();
     const focused = state.focused || state.composer.contains(document.activeElement);
     const closedToolbarClearance = Platform.isMobile ? this.measureBottomToolbar(state.root) : 0;
     const layout = calculateViewportLayout({ mobile: Platform.isMobile, focused, layoutHeight: window.innerHeight, visualHeight: vv?.height || window.innerHeight, visualOffsetTop: vv?.offsetTop || 0, containerBottom: rect.bottom, closedToolbarClearance });
-    state.root.classList.toggle("is-compose-mode", layout.composeMode); state.root.classList.toggle("is-keyboard-open", layout.keyboardOpen);
-    state.root.style.setProperty("--solomon-bottom-clearance", `${layout.bottomClearance}px`);
+    const nativeKeyboardOpen = focused && this.nativeKeyboardVisible && this.nativeKeyboardHeight > 0;
+    state.root.classList.toggle("is-compose-mode", layout.composeMode || nativeKeyboardOpen); state.root.classList.toggle("is-keyboard-open", layout.keyboardOpen || nativeKeyboardOpen);
+    state.root.style.setProperty("--solomon-bottom-clearance", `${nativeKeyboardOpen ? this.nativeKeyboardHeight : layout.bottomClearance}px`);
   }
 
   private measureBottomToolbar(root: HTMLElement): number {
