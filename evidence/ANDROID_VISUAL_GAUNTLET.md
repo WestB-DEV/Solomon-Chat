@@ -46,4 +46,12 @@
 ### Round 5 — `1.1.0-beta.6`
 
 - Builder target: place the portrait keyboard-open speaker selector on its own row, preserving a usable textarea width while avoiding Obsidian's floating control.
+- Artifact SHA-256: `eab6210f117655acb271e0ba7a10f02592e19fa02a5a1791a60f157444f14492`.
+- Commit: `dcd57f92c4fbf7e8cce66fd8d1d53b0810814c09`.
+- Deterministic checks: lint (zero errors, one pre-existing settings-search warning), 23 tests, typecheck, and production build passed.
+- Android result: **FAIL — P1.** Exact beta.6 still gave the speaker selector most of the first flex row, leaving the textarea only a few characters wide in portrait with Gboard open.
+
+### Round 6 — `1.1.0-beta.7`
+
+- Builder target: use an explicit portrait keyboard-open grid with the speaker selector on row one and a full-width input/action row below it; retain the proven compact landscape flex row.
 - Status: implementation in progress.

@@ -140,14 +140,19 @@
   .solomon-chat-root.is-compose-mode { grid-template-rows: 0 minmax(0, 1fr) auto; gap: var(--size-4-1); }
   .solomon-chat-root.is-compose-mode .solomon-chat-header { border-width: 0; max-height: 0; opacity: 0; overflow: hidden; padding-block: 0; pointer-events: none; }
   .solomon-chat-root.is-keyboard-open { transition: none; }
-  .is-phone .solomon-chat-root.is-keyboard-open .solomon-chat-sender { flex: 0 0 calc(100% - 44px); margin-left: 44px; width: fit-content; }
+  .is-phone .solomon-chat-root.is-keyboard-open .solomon-chat-composer { display: grid; grid-template-columns: minmax(0, 1fr) 48px 48px; }
+  .is-phone .solomon-chat-root.is-keyboard-open .solomon-chat-sender { grid-column: 1 / -1; justify-self: start; margin-left: 44px; width: fit-content; }
+  .is-phone .solomon-chat-root.is-keyboard-open .solomon-chat-attachment-tray { grid-column: 1 / -1; }
+  .is-phone .solomon-chat-root.is-keyboard-open .solomon-chat-composer textarea { grid-column: 1; min-width: 0; width: 100%; }
+  .is-phone .solomon-chat-root.is-keyboard-open .solomon-chat-icon { grid-column: 2; }
+  .is-phone .solomon-chat-root.is-keyboard-open .solomon-chat-send { grid-column: 3; }
 }
 
 @media (orientation: landscape) and (max-height: 500px) {
   .solomon-chat-root.is-keyboard-open .solomon-chat-composer textarea { max-height: 48px; }
   .solomon-chat-root.is-keyboard-open .solomon-chat-attachment-tray { flex: 0 1 150px; max-height: 36px; min-width: 0; }
-  .is-phone .solomon-chat-root.is-keyboard-open .solomon-chat-composer { padding-inline: 6px; }
-  .is-phone .solomon-chat-root.is-keyboard-open .solomon-chat-sender { flex-basis: auto; margin-left: 0; }
+  .is-phone .solomon-chat-root.is-keyboard-open .solomon-chat-composer { display: flex; padding-inline: 6px; }
+  .is-phone .solomon-chat-root.is-keyboard-open .solomon-chat-sender { margin-left: 0; }
 }
 
 .solomon-chat-mobile-modal input, .solomon-chat-mobile-modal textarea { font-size: 16px; }
