@@ -140,10 +140,12 @@
   .solomon-chat-root.is-compose-mode { grid-template-rows: 0 minmax(0, 1fr) auto; gap: var(--size-4-1); }
   .solomon-chat-root.is-compose-mode .solomon-chat-header { border-width: 0; max-height: 0; opacity: 0; overflow: hidden; padding-block: 0; pointer-events: none; }
   .solomon-chat-root.is-keyboard-open { transition: none; }
+  .is-phone .solomon-chat-root.is-keyboard-open .solomon-chat-composer { padding-inline: 50px; }
 }
 
 @media (orientation: landscape) and (max-height: 500px) {
   .solomon-chat-root.is-keyboard-open .solomon-chat-composer textarea { max-height: 48px; }
+  .is-phone .solomon-chat-root.is-keyboard-open .solomon-chat-composer { padding-inline: 6px; }
 }
 
 .solomon-chat-mobile-modal input, .solomon-chat-mobile-modal textarea { font-size: 16px; }
