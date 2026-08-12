@@ -130,13 +130,19 @@ export function replaceMessageById(content: string, messageId: string, replaceme
 }
 
 /** Lazily persists deterministic IDs into legacy markers without changing message bodies. */
-export function ensureMessageIds(content: string): string {
+export function ensureMessageIds(content: string, namespace = "legacy"): string {
   const parsed = parseConversation(content, {}, { leftName: "Left", rightName: "Right", attachmentFolder: "attachments" });
   let ordinal = 0;
   return content.replace(/^\[(left|right)(?:\s*,\s*([^,\]]*?))?(?:\s*,\s*id=([A-Za-z0-9._:-]+))?\]\s*$/gim, (marker, side: string, timestamp: string | undefined, id: string | undefined) => {
     const message = parsed.messages[ordinal++]; if (id || !message) return marker;
-    return `[${side.toLowerCase()}, ${(timestamp || "").trim()}, id=${message.id}]`;
+    return `[${side.toLowerCase()}, ${(timestamp || "").trim()}, id=${namespaceLegacyId(message.id, namespace)}]`;
   });
+}
+
+function namespaceLegacyId(messageId: string, namespace: string): string {
+  let hash = 2166136261;
+  for (const char of namespace) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  return `${messageId}-${(hash >>> 0).toString(36)}`;
 }
 
 /** One-file, one-write send transform: append and speaker advancement cannot diverge. */

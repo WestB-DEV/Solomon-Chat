@@ -142,6 +142,9 @@
   .solomon-chat-root.is-keyboard-open { transition: none; }
 }
 
+.solomon-chat-mobile-modal input, .solomon-chat-mobile-modal textarea { font-size: 16px; }
+.solomon-chat-mobile-modal .modal-button-container { background: var(--background-primary); bottom: 0; padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)); position: sticky; z-index: 2; }
+
 @media (prefers-reduced-motion: reduce) {
   .solomon-chat-root, .solomon-chat-header, .solomon-chat-messages, .solomon-chat-send { scroll-behavior: auto; transition: none; }
   .solomon-chat-message.is-entering .solomon-chat-bubble, .solomon-chat-message.is-entering .solomon-chat-meta { animation: none; }

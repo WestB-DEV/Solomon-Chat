@@ -3,6 +3,7 @@ import {
   CONTINUATION_SOFT_BYTE_LIMIT,
   CONTINUATION_SOFT_MESSAGE_LIMIT,
   assessContinuationRollover,
+  applyContinuationRepair,
   buildContinuationSegment,
   continuationFileName,
   parseContinuationSegment,
@@ -105,6 +106,14 @@ describe("native Obsidian continuation chains", () => {
     expect(plan.repairs[0].content).toContain("> ← Previous: [[Repairable]]");
     expect(plan.repairs[0].content.match(/Second truth\./g)).toHaveLength(1);
     expect(planContinuationRepairs([first, { ...second, content: plan.repairs[0].content }]).issues).toEqual([]);
+  });
+
+  it("repairs navigation against the latest content without overwriting concurrent messages", () => {
+    const initial = buildContinuationSegment({ baseName: "Concurrent", conversationId: "conv", segmentIndex: 1, messageMarkdown: "[right, t]\nOriginal." });
+    const latest = initial.content.replace("Original.", "Original.\n\n[left, later]\nConcurrent edit.");
+    const repaired = applyContinuationRepair(latest, null, "Concurrent — Part 002.md");
+    expect(repaired).toContain("Concurrent edit.");
+    expect(repaired).toContain("> Continue: [[Concurrent — Part 002]] →");
   });
 
   it("sustains 10 segments, 20,000 unique messages, and at least 2.5 MiB", () => {

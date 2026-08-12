@@ -2,7 +2,7 @@ import {
   Component, MarkdownRenderer, MarkdownView, Menu, Notice, Plugin, Platform, TFile, WorkspaceLeaf, normalizePath, setIcon,
 } from "obsidian";
 import { DEFAULT_SETTINGS, FM, PERSPECTIVE_PROMPTS, type Side, type SolomonSettings } from "./constants";
-import { assessContinuationRollover, buildContinuationSegment, continuationFileName, planContinuationRepairs } from "./continuation";
+import { applyContinuationRepair, assessContinuationRollover, buildContinuationSegment, continuationFileName, parseContinuationSegment, planContinuationRepairs } from "./continuation";
 import { draftKey, moveDraft, normalizeDraftEnvelope, upsertDraft, type DraftEnvelope, type DurableDraft } from "./drafts";
 import { FormModal } from "./modals";
 import { applySend, createStableId, currentTimestamp, ensureMessageIds, parseConversation, replaceMessageById, type Conversation } from "./model";
@@ -12,6 +12,7 @@ import { calculateViewportLayout } from "./viewport";
 interface ViewState {
   leaf: WorkspaceLeaf;
   file: TFile;
+  writeFile: TFile;
   root: HTMLElement;
   header: HTMLElement;
   messages: HTMLElement;
@@ -51,11 +52,13 @@ export default class SolomonChatPlugin extends Plugin {
   private viewportTimer = 0;
   private draftTimer = 0;
   private drafts: DraftEnvelope = { version: 1, drafts: {} };
+  private draftSaveQueue: Promise<void> = Promise.resolve();
 
   async onload(): Promise<void> {
     const stored = await this.loadData() as { settings?: Partial<SolomonSettings>; drafts?: unknown } & Partial<SolomonSettings> | null;
     this.settings = { ...DEFAULT_SETTINGS, ...(stored?.settings || stored || {}) };
     this.drafts = normalizeDraftEnvelope(stored?.drafts);
+    try { const emergency = window.localStorage.getItem(this.emergencyDraftKey()); if (emergency) { const recovered = normalizeDraftEnvelope(JSON.parse(emergency)); for (const draft of Object.values(recovered.drafts)) { const current = this.drafts.drafts[draftKey(draft.conversationId, draft.filePath)]; if (!current || draft.updatedAt > current.updatedAt) this.drafts = upsertDraft(this.drafts, draft); } } } catch (error) { console.error("Solomon Chat: emergency draft recovery failed", error); }
     this.addRibbonIcon("messages-square", "Create a conversation", () => this.openCreateModal());
     this.addCommand({ id: "create-conversation", name: "Create new conversation", callback: () => this.openCreateModal() });
     this.addCommand({ id: "edit-participants", name: "Edit conversation participants", checkCallback: (checking) => this.withActiveConversation(checking, (file) => this.openParticipantsModal(file)) });
@@ -130,23 +133,25 @@ export default class SolomonChatPlugin extends Plugin {
       await this.app.fileManager.processFrontMatter(file, (fm: Frontmatter) => { fm[FM.conversationId] = conversationId; if (!fm[FM.segmentIndex]) fm[FM.segmentIndex] = 1; });
       content = await this.app.vault.read(file); conversation = parseConversation(content, this.frontmatterFor(file), { leftName: this.settings.defaultLeftName, rightName: this.settings.defaultRightName, attachmentFolder: this.defaultAttachmentFolder(file) });
     }
-    const migratedContent = ensureMessageIds(content); if (migratedContent !== content) { await this.app.vault.modify(file, migratedContent); content = migratedContent; conversation = parseConversation(content, this.frontmatterFor(file), { leftName: this.settings.defaultLeftName, rightName: this.settings.defaultRightName, attachmentFolder: this.defaultAttachmentFolder(file) }); }
+    const migratedContent = ensureMessageIds(content, file.path); if (migratedContent !== content) { await this.app.vault.process(file, (latest) => ensureMessageIds(latest, file.path)); content = await this.app.vault.read(file); conversation = parseConversation(content, this.frontmatterFor(file), { leftName: this.settings.defaultLeftName, rightName: this.settings.defaultRightName, attachmentFolder: this.defaultAttachmentFolder(file) }); }
     let messageFiles = conversation.messages.map(() => file);
+    let writeFile = file; let writeContent = content;
     const conversationId = conversation.conversationId;
     if (conversationId) {
       const folder = this.parentPath(file.path);
       const candidates = this.app.vault.getMarkdownFiles().filter((candidate) => this.parentPath(candidate.path) === folder && (this.frontmatterString(this.frontmatterFor(candidate), FM.conversationId) || this.frontmatterString(this.frontmatterFor(candidate), "conversation_id")) === conversationId);
       if (candidates.length > 1) {
-        const loaded = await Promise.all(candidates.map(async (candidate) => { const original = await this.app.vault.cachedRead(candidate); const migrated = ensureMessageIds(original); if (migrated !== original) await this.app.vault.modify(candidate, migrated); return { file: candidate, content: migrated, index: Number(this.frontmatterFor(candidate)[FM.segmentIndex] || this.frontmatterFor(candidate).segment_index) || 1 }; }));
+        const loaded = await Promise.all(candidates.map(async (candidate) => { const original = await this.app.vault.cachedRead(candidate); const migrated = ensureMessageIds(original, candidate.path); if (migrated !== original) await this.app.vault.process(candidate, (latest) => ensureMessageIds(latest, candidate.path)); const latest = migrated !== original ? await this.app.vault.read(candidate) : original; return { file: candidate, content: latest, index: Number(this.frontmatterFor(candidate)[FM.segmentIndex] || this.frontmatterFor(candidate).segment_index) || 1 }; }));
         loaded.sort((a, b) => a.index - b.index || a.file.path.localeCompare(b.file.path));
         const parsed = loaded.map((item) => ({ ...item, conversation: parseConversation(item.content, this.frontmatterFor(item.file), { leftName: this.settings.defaultLeftName, rightName: this.settings.defaultRightName, attachmentFolder: this.defaultAttachmentFolder(item.file) }) }));
-        conversation = { ...conversation, messages: parsed.flatMap((item) => item.conversation.messages) };
+        const tail = parsed.at(-1)!; writeFile = tail.file; writeContent = tail.content;
+        conversation = { ...conversation, nextSide: tail.conversation.nextSide, attachmentFolder: tail.conversation.attachmentFolder, messages: parsed.flatMap((item) => item.conversation.messages) };
         messageFiles = parsed.flatMap((item) => item.conversation.messages.map(() => item.file));
         const repairPlan = planContinuationRepairs(loaded.map((item) => ({ fileName: item.file.name, content: item.content })));
-        for (const repair of repairPlan.repairs) { const target = loaded.find((item) => item.file.name === repair.fileName); if (target && target.content !== repair.content) await this.app.vault.modify(target.file, repair.content); }
+        for (const repair of repairPlan.repairs) { const target = loaded.find((item) => item.file.name === repair.fileName); const expected = parseContinuationSegment({ fileName: repair.fileName, content: repair.content }); if (target && expected) await this.app.vault.process(target.file, (latest) => applyContinuationRepair(latest, expected.previousSegment, expected.nextSegment)); }
       }
     }
-    this.render(leaf, file, conversation, content, messageFiles);
+    this.render(leaf, file, writeFile, conversation, writeContent, messageFiles);
   }
 
   private createState(leaf: WorkspaceLeaf, file: TFile, conversation: Conversation): ViewState {
@@ -158,7 +163,7 @@ export default class SolomonChatPlugin extends Plugin {
     const announcer = root.createDiv({ cls: "solomon-chat-announcer", attr: { "aria-live": "polite", "aria-atomic": "true" } });
     const composer = root.createDiv({ cls: "solomon-chat-composer" });
     const sender = composer.createDiv({ cls: "solomon-chat-sender", attr: { role: "radiogroup", "aria-label": "Send message as" } });
-    for (const side of ["left", "right"] as Side[]) { const option = sender.createEl("button", { attr: { role: "radio", "data-side": side } }); option.type = "button"; option.addEventListener("click", () => void this.selectSpeaker(file, side)); }
+    for (const side of ["left", "right"] as Side[]) { const option = sender.createEl("button", { attr: { role: "radio", "data-side": side } }); option.type = "button"; option.addEventListener("click", () => void this.selectSpeaker(state.writeFile, side)); option.addEventListener("keydown", (event) => { if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); const target: Side = event.key === "ArrowLeft" ? "left" : "right"; void this.selectSpeaker(state.writeFile, target); state.sender.querySelector<HTMLButtonElement>(`button[data-side=${target}]`)?.focus(); } }); }
     const attachmentTray = composer.createDiv({ cls: "solomon-chat-attachment-tray", attr: { "aria-label": "Draft attachments" } });
     const textarea = composer.createEl("textarea", { attr: { rows: "1", enterkeyhint: "send", autocapitalize: "sentences", placeholder: "Write a message…" } });
     const attach = composer.createEl("button", { cls: "solomon-chat-icon", attr: { "aria-label": "Attach files" } }); attach.type = "button"; setIcon(attach, "paperclip");
@@ -167,7 +172,7 @@ export default class SolomonChatPlugin extends Plugin {
     const conversationId = conversation.conversationId;
     const restored = this.drafts.drafts[draftKey(conversationId, file.path)] || this.drafts.drafts[draftKey("", file.path)];
     if (restored && !this.drafts.drafts[draftKey(conversationId, file.path)]) this.drafts = moveDraft(this.drafts, "", file.path, conversationId, file.path);
-    const state: ViewState = { leaf, file, root, header, messages, announcer, composer, attachmentTray, textarea, sender, attach, send, draft: restored?.text || "", draftAttachments: restored?.attachmentPaths || [], conversationId, operationId: restored?.operationId, operationSide: restored?.operationSide, sourceContent: "", continuationSuggested: false, messageFiles: [], conversation, component, focused: false, sending: false, blurTimer: 0, lastMessageCount: 0, visibleStart: 0 };
+    const state = { leaf, file, writeFile: file, root, header, messages, announcer, composer, attachmentTray, textarea, sender, attach, send, draft: restored?.text || "", draftAttachments: restored?.attachmentPaths || [], conversationId, operationId: restored?.operationId, operationSide: restored?.operationSide, sourceContent: "", continuationSuggested: false, messageFiles: [], conversation, component, focused: false, sending: false, blurTimer: 0, lastMessageCount: 0, visibleStart: 0 } as ViewState;
 
     textarea.addEventListener("input", () => { state.draft = textarea.value; state.operationId = undefined; state.operationSide = undefined; this.persistDraft(state); this.resizeTextarea(textarea); send.disabled = state.sending || !textarea.value.trim(); });
     textarea.addEventListener("focus", () => { state.focused = true; this.applyViewport(state); });
@@ -186,25 +191,27 @@ export default class SolomonChatPlugin extends Plugin {
     return state;
   }
 
-  private render(leaf: WorkspaceLeaf, file: TFile, conversation: Conversation, sourceContent: string, messageFiles: TFile[]): void {
+  private render(leaf: WorkspaceLeaf, file: TFile, writeFile: TFile, conversation: Conversation, sourceContent: string, messageFiles: TFile[]): void {
     let state = this.states.get(leaf);
     const firstRender = !state;
     const oldPath = state?.file.path;
     const preserveFocus = state?.textarea === document.activeElement;
     const oldCount = state?.lastMessageCount || 0;
+    const oldScrollHeight = state?.messages.scrollHeight || 0; const oldScrollTop = state?.messages.scrollTop || 0;
+    const wasNearBottom = !state || oldScrollHeight - oldScrollTop - state.messages.clientHeight < 80;
     if (!state) { state = this.createState(leaf, file, conversation); this.states.set(leaf, state); }
     if (oldPath && oldPath !== file.path) {
       const conversationId = this.frontmatterString(this.frontmatterFor(file), FM.conversationId);
       const restored = this.drafts.drafts[draftKey(conversationId, file.path)];
       state.draft = restored?.text || ""; state.draftAttachments = restored?.attachmentPaths || []; state.conversationId = conversationId; state.operationId = restored?.operationId; state.operationSide = restored?.operationSide;
     }
-    state.file = file; state.conversation = conversation; state.sourceContent = sourceContent; state.messageFiles = messageFiles;
-    state.continuationSuggested = assessContinuationRollover(sourceContent, conversation.messages.length).shouldOfferContinuation;
-    state.component.unload(); state.component = new Component(); state.component.load();
+    state.file = file; state.writeFile = writeFile; state.conversation = conversation; state.sourceContent = sourceContent; state.messageFiles = messageFiles;
+    const tailMessageCount = messageFiles.filter((messageFile) => messageFile.path === writeFile.path).length;
+    state.continuationSuggested = assessContinuationRollover(sourceContent, tailMessageCount).shouldOfferContinuation;
     leaf.view.containerEl.addClass("solomon-chat-active");
     this.applyColors(state.root);
     this.renderHeader(state);
-    state.messages.empty();
+    state.messages.querySelectorAll(":scope > :not(.solomon-chat-message)").forEach((element) => element.remove());
     if (conversation.preamble) {
       const preamble = state.messages.createDiv({ cls: "solomon-chat-preamble" });
       void MarkdownRenderer.render(this.app, conversation.preamble, preamble, file.path, state.component);
@@ -214,12 +221,17 @@ export default class SolomonChatPlugin extends Plugin {
     else state.visibleStart = Math.min(state.visibleStart, Math.max(0, conversation.messages.length - 1));
     if (state.visibleStart > 0) {
       const older = state.messages.createEl("button", { cls: "solomon-chat-load-older", text: `Load ${Math.min(400, state.visibleStart)} older messages` });
-      older.addEventListener("click", () => { state.visibleStart = Math.max(0, state.visibleStart - 400); this.render(state.leaf, state.file, state.conversation, state.sourceContent, state.messageFiles); });
+      older.addEventListener("click", () => { state.visibleStart = Math.max(0, state.visibleStart - 400); this.render(state.leaf, state.file, state.writeFile, state.conversation, state.sourceContent, state.messageFiles); });
     }
+    const existing = new Map(Array.from(state.messages.querySelectorAll<HTMLElement>(":scope > .solomon-chat-message")).map((element) => [element.dataset.messageKey || "", element]));
+    const keep = new Set<string>();
     for (let index = state.visibleStart; index < conversation.messages.length; index++) {
       const animate = !firstRender && conversation.messages.length > oldCount && index >= oldCount;
-      this.renderMessage(state, index, animate);
+      const message = conversation.messages[index]; const messageFile = messageFiles[index] || file; const key = `${messageFile.path}:${message.id}`; const fingerprint = this.messageFingerprint(message.side, message.timestamp, message.content);
+      let wrapper = existing.get(key); if (wrapper?.dataset.fingerprint !== fingerprint) { wrapper?.remove(); wrapper = undefined; }
+      wrapper ||= this.renderMessage(state, index, animate, key, fingerprint); state.messages.appendChild(wrapper); keep.add(key);
     }
+    for (const [key, element] of existing) if (!keep.has(key)) element.remove();
     state.lastMessageCount = conversation.messages.length;
     state.textarea.value = state.draft;
     this.renderAttachmentTray(state);
@@ -228,7 +240,8 @@ export default class SolomonChatPlugin extends Plugin {
     this.applyViewport(state);
     const renderedState = state;
     window.setTimeout(() => {
-      if (firstRender || conversation.messages.length > oldCount) renderedState.messages.scrollTop = renderedState.messages.scrollHeight;
+      if (firstRender || wasNearBottom) renderedState.messages.scrollTop = renderedState.messages.scrollHeight;
+      else renderedState.messages.scrollTop = Math.max(0, oldScrollTop + renderedState.messages.scrollHeight - oldScrollHeight);
       if (this.settings.autoFocusComposer && (firstRender && !Platform.isMobile || preserveFocus)) this.focusTextarea(renderedState.textarea);
     }, 0);
   }
@@ -239,7 +252,7 @@ export default class SolomonChatPlugin extends Plugin {
     const actions = state.header.createDiv({ cls: "solomon-chat-actions" });
     this.iconButton(actions, "ellipsis", "Conversation actions", () => this.openConversationMenu(state));
     const activeName = state.conversation.nextSide === "left" ? state.conversation.leftName : state.conversation.rightName;
-    for (const option of Array.from(state.sender.querySelectorAll<HTMLButtonElement>("button[data-side]"))) { const side = option.dataset.side as Side; option.textContent = side === "left" ? state.conversation.leftName : state.conversation.rightName; option.setAttribute("aria-checked", String(side === state.conversation.nextSide)); option.toggleClass("is-active", side === state.conversation.nextSide); }
+    for (const option of Array.from(state.sender.querySelectorAll<HTMLButtonElement>("button[data-side]"))) { const side = option.dataset.side as Side; option.textContent = side === "left" ? state.conversation.leftName : state.conversation.rightName; option.setAttribute("aria-checked", String(side === state.conversation.nextSide)); option.tabIndex = side === state.conversation.nextSide ? 0 : -1; option.toggleClass("is-active", side === state.conversation.nextSide); }
     state.textarea.placeholder = `Message as ${activeName}`;
   }
 
@@ -275,10 +288,11 @@ export default class SolomonChatPlugin extends Plugin {
     prompt.addEventListener("click", () => this.openPromptMenu(state));
   }
 
-  private renderMessage(state: ViewState, index: number, animate = false): void {
+  private renderMessage(state: ViewState, index: number, animate = false, key = "", fingerprint = ""): HTMLElement {
     const message = state.conversation.messages[index];
     const messageFile = state.messageFiles[index] || state.file;
     const wrapper = state.messages.createDiv({ cls: `solomon-chat-message is-${message.side}${animate ? " is-entering" : ""}` });
+    wrapper.dataset.messageKey = key; wrapper.dataset.fingerprint = fingerprint;
     const name = message.side === "left" ? state.conversation.leftName : state.conversation.rightName;
     if (this.settings.showTimestamps) wrapper.createDiv({ cls: "solomon-chat-meta", text: message.timestamp ? `${name} · ${this.formatTimestamp(message.timestamp)}` : name });
     const bubble = wrapper.createDiv({ cls: "solomon-chat-bubble" });
@@ -296,6 +310,7 @@ export default class SolomonChatPlugin extends Plugin {
     const cancel = () => { if (timer) window.clearTimeout(timer); timer = 0; };
     bubble.addEventListener("touchend", cancel); bubble.addEventListener("touchcancel", cancel);
     bubble.addEventListener("touchmove", (event) => { const touch = event.touches[0]; if (Math.abs(touch.clientX - startX) > 8 || Math.abs(touch.clientY - startY) > 8) cancel(); }, { passive: true });
+    return wrapper;
   }
 
   private async submit(state: ViewState): Promise<void> {
@@ -304,9 +319,15 @@ export default class SolomonChatPlugin extends Plugin {
     const side = state.operationSide || state.conversation.nextSide;
     const operationId = state.operationId || createStableId();
     state.operationId = operationId; state.operationSide = side; this.persistDraft(state); await this.flushDrafts();
-    state.sending = true; state.send.disabled = true; state.attach.disabled = true;
+    state.sending = true; state.send.disabled = true; state.send.setAttribute("aria-busy", "true"); state.attach.disabled = true;
     try {
-      await this.queue(state.file.path, async () => this.app.vault.process(state.file, (content) => applySend(content, { id: operationId, side, timestamp: currentTimestamp(), message: draft })));
+      await this.queue(`conversation:${state.conversationId}`, async () => {
+        const candidates = [...new Map([...this.conversationFiles(state.conversationId), state.writeFile].map((file) => [file.path, file])).values()];
+        const fresh = await Promise.all(candidates.map(async (file) => ({ file, content: await this.app.vault.read(file), index: Number(this.frontmatterFor(file)[FM.segmentIndex] || this.frontmatterFor(file).segment_index) || 1 })));
+        if (fresh.some((item) => parseConversation(item.content, this.frontmatterFor(item.file), { leftName: this.settings.defaultLeftName, rightName: this.settings.defaultRightName, attachmentFolder: this.defaultAttachmentFolder(item.file) }).messages.some((message) => message.id === operationId))) return;
+        fresh.sort((a, b) => a.index - b.index || a.file.path.localeCompare(b.file.path)); const tail = fresh.at(-1)?.file || state.writeFile;
+        state.writeFile = tail; await this.app.vault.process(tail, (content) => applySend(content, { id: operationId, side, timestamp: currentTimestamp(), message: draft }));
+      });
       state.draft = ""; state.textarea.value = ""; state.operationId = undefined; state.operationSide = undefined; state.draftAttachments = []; this.persistDraft(state); await this.flushDrafts();
       state.conversation.nextSide = side === "left" ? "right" : "left";
       state.announcer.textContent = `Message sent as ${side === "left" ? state.conversation.leftName : state.conversation.rightName}`;
@@ -314,23 +335,25 @@ export default class SolomonChatPlugin extends Plugin {
     } catch (error) {
       console.error("Solomon Chat: send failed", error);
       let persisted = false;
-      try { persisted = parseConversation(await this.app.vault.read(state.file), this.frontmatterFor(state.file), { leftName: this.settings.defaultLeftName, rightName: this.settings.defaultRightName, attachmentFolder: this.defaultAttachmentFolder(state.file) }).messages.some((message) => message.id === operationId); } catch (readError) { console.error("Solomon Chat: send reconciliation failed", readError); }
+      try { persisted = state.conversation.messages.some((message) => message.id === operationId) || parseConversation(await this.app.vault.read(state.writeFile), this.frontmatterFor(state.writeFile), { leftName: this.settings.defaultLeftName, rightName: this.settings.defaultRightName, attachmentFolder: this.defaultAttachmentFolder(state.writeFile) }).messages.some((message) => message.id === operationId); } catch (readError) { console.error("Solomon Chat: send reconciliation failed", readError); }
       if (persisted) { state.draft = ""; state.textarea.value = ""; state.operationId = undefined; state.operationSide = undefined; state.draftAttachments = []; this.persistDraft(state); await this.flushDrafts(); state.conversation.nextSide = side === "left" ? "right" : "left"; this.renderHeader(state); new Notice("Message sent."); }
       else new Notice("Could not send that message. Your draft is still here.");
     }
-    finally { state.sending = false; state.attach.disabled = false; state.send.disabled = !state.textarea.value.trim(); }
+    finally { state.sending = false; state.send.removeAttribute("aria-busy"); state.attach.disabled = false; state.send.disabled = !state.textarea.value.trim(); }
   }
 
   private async switchSpeaker(file: TFile): Promise<void> {
     const visibleStates = [...this.states.values()].filter((state) => state.file.path === file.path);
     const visibleSide = visibleStates[0]?.conversation.nextSide;
-    const cachedSide = this.frontmatterFor(file)[FM.nextSide];
+    const writeFile = visibleStates[0]?.writeFile || file;
+    const cachedSide = this.frontmatterFor(writeFile)[FM.nextSide];
     const target: Side = (visibleSide || cachedSide) === "left" ? "right" : "left";
-    await this.selectSpeaker(file, target);
+    await this.selectSpeaker(writeFile, target);
   }
 
   private async selectSpeaker(file: TFile, target: Side): Promise<void> {
-    const visibleStates = [...this.states.values()].filter((state) => state.file.path === file.path);
+    const conversationId = this.frontmatterString(this.frontmatterFor(file), FM.conversationId) || this.frontmatterString(this.frontmatterFor(file), "conversation_id");
+    const visibleStates = [...this.states.values()].filter((state) => state.writeFile.path === file.path || state.conversationId === conversationId);
     for (const state of visibleStates) {
       if (state.operationSide && state.operationSide !== target) { state.operationId = undefined; state.operationSide = undefined; this.persistDraft(state); }
       state.conversation.nextSide = target;
@@ -339,8 +362,8 @@ export default class SolomonChatPlugin extends Plugin {
     await this.queue(file.path, async () => this.app.fileManager.processFrontMatter(file, (fm: Frontmatter) => {
       this.ensureFrontmatter(fm, file, target);
     }));
-    this.scheduleFile(file);
-    window.setTimeout(() => { const state = [...this.states.values()].find((item) => item.file.path === file.path); if (state) this.focusTextarea(state.textarea); }, 0);
+    for (const state of visibleStates) this.scheduleFile(state.file);
+    window.setTimeout(() => { const state = visibleStates[0]; if (state) this.focusTextarea(state.textarea); }, 0);
   }
 
   private openPromptMenu(state: ViewState): void {
@@ -389,7 +412,7 @@ export default class SolomonChatPlugin extends Plugin {
     let before = ""; let after = "";
     await this.queue(file.path, async () => this.app.vault.process(file, (existing) => { before = existing; after = replaceMessageById(existing, messageId, null); return after; }));
     const content = createFragment(); content.appendText("Message deleted "); const undo = content.createEl("button", { text: "Undo" });
-    const notice = new Notice(content, 7000); undo.addEventListener("click", () => { void this.queue(file.path, async () => this.app.vault.process(file, (existing) => existing === after ? before : existing)); notice.hide(); });
+    const notice = new Notice(content, 7000); undo.addEventListener("click", () => { void this.queue(file.path, async () => { let restored = false; await this.app.vault.process(file, (existing) => { restored = existing === after; return restored ? before : existing; }); if (!restored) new Notice("Undo could not be applied because the file changed. Use Obsidian file recovery if needed."); }); notice.hide(); });
   }
 
   private async createConversation(title: string, left: string, right: string): Promise<void> {
@@ -417,21 +440,22 @@ export default class SolomonChatPlugin extends Plugin {
     const tooLarge = selected.find((file) => file.size > 100 * 1024 * 1024);
     if (tooLarge) { new Notice(`${tooLarge.name} exceeds Solomon's 100 MiB per-file mobile safety limit.`); return; }
     state.attach.disabled = true;
+    const importedPaths: string[] = [];
     try {
-      const folder = await this.ensureAttachmentFolder(state.file);
-      const links: string[] = []; const importedPaths: string[] = [];
+      const folder = await this.ensureAttachmentFolder(state.writeFile);
+      const links: string[] = [];
       for (const file of selected) {
         const target = await this.availablePath(folder, this.safeName(file.name, true), "");
         await this.app.vault.createBinary(target, await file.arrayBuffer());
         importedPaths.push(target);
-        const relative = this.relativePath(this.parentPath(state.file.path), target);
+        const relative = this.relativePath(this.parentPath(state.writeFile.path), target);
         const escaped = encodeURI(relative).replace(/#/g, "%23");
         links.push(file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg|heic)$/i.test(file.name) ? `![${file.name}](${escaped})` : `[${file.name}](${escaped})`);
       }
       const insertion = links.join("\n");
       state.textarea.value = state.textarea.value.trim() ? `${state.textarea.value.trimEnd()}\n\n${insertion}` : insertion;
       state.draft = state.textarea.value; state.draftAttachments.push(...importedPaths); this.persistDraft(state); this.renderAttachmentTray(state); state.send.disabled = false; this.resizeTextarea(state.textarea); this.focusTextarea(state.textarea);
-    } catch (error) { console.error("Solomon Chat: attachment failed", error); new Notice("Could not import attachment."); }
+    } catch (error) { for (const path of importedPaths) { const target = this.app.vault.getAbstractFileByPath(path); if (target instanceof TFile) { try { await this.app.fileManager.trashFile(target); } catch (cleanupError) { console.error("Solomon Chat: attachment cleanup failed", cleanupError); } } } console.error("Solomon Chat: attachment failed", error); new Notice("Could not import attachment. Any partial imports were moved to trash."); }
     finally { state.attach.disabled = false; }
   }
 
@@ -530,7 +554,7 @@ export default class SolomonChatPlugin extends Plugin {
   }
 
   private async removeDraftAttachment(state: ViewState, path: string): Promise<void> {
-    const relative = encodeURI(this.relativePath(this.parentPath(state.file.path), path)).replace(/#/g, "%23");
+    const relative = encodeURI(this.relativePath(this.parentPath(state.writeFile.path), path)).replace(/#/g, "%23");
     state.draft = state.textarea.value.split("\n").filter((line) => !line.includes(`](${relative})`)).join("\n").replace(/\n{3,}/g, "\n\n").trim();
     state.textarea.value = state.draft; state.draftAttachments = state.draftAttachments.filter((item) => item !== path);
     const ownedFolder = normalizePath(state.conversation.attachmentFolder); const normalizedPath = normalizePath(path);
@@ -540,38 +564,47 @@ export default class SolomonChatPlugin extends Plugin {
 
   private async continueConversation(state: ViewState): Promise<void> {
     if (state.sending || state.textarea.value.trim()) { new Notice("Send or clear the current draft before continuing on a new page."); return; }
-    const currentFm = this.frontmatterFor(state.file);
+    const currentFm = this.frontmatterFor(state.writeFile);
     const conversationId = this.frontmatterString(currentFm, FM.conversationId) || createStableId("conversation");
     const currentIndex = Number(currentFm[FM.segmentIndex]) || 1;
-    const baseName = state.file.basename.replace(/ \u2014 Part \d{3}$/u, "");
+    const baseName = state.writeFile.basename.replace(/ \u2014 Part \d{3}$/u, "");
     const nextName = continuationFileName(baseName, currentIndex + 1);
-    const folder = this.parentPath(state.file.path); const nextPath = normalizePath(`${folder ? `${folder}/` : ""}${nextName}`);
+    const folder = this.parentPath(state.writeFile.path); const nextPath = normalizePath(`${folder ? `${folder}/` : ""}${nextName}`);
     if (this.app.vault.getAbstractFileByPath(nextPath)) { new Notice("That continuation page already exists. Solomon will repair its links when opened."); return; }
     const built = buildContinuationSegment({ baseName, conversationId, segmentIndex: currentIndex + 1, messageMarkdown: "" });
     const nextFile = await this.app.vault.create(nextPath, built.content);
     try {
       await this.app.fileManager.processFrontMatter(nextFile, (fm: Frontmatter) => {
-        fm[FM.flag] = true; fm[FM.conversationId] = conversationId; fm[FM.segmentIndex] = currentIndex + 1; fm[FM.previousSegment] = `[[${state.file.basename}]]`;
+        fm[FM.flag] = true; fm[FM.conversationId] = conversationId; fm[FM.segmentIndex] = currentIndex + 1; fm[FM.previousSegment] = `[[${state.writeFile.basename}]]`;
         for (const key of [FM.leftName, FM.rightName, FM.nextSide, FM.attachmentFolder, FM.leftBio, FM.rightBio, FM.leftAvatar, FM.rightAvatar]) if (currentFm[key] != null) fm[key] = currentFm[key];
       });
       const nextContent = await this.app.vault.read(nextFile);
-      const plan = planContinuationRepairs([{ fileName: state.file.name, content: state.sourceContent }, { fileName: nextFile.name, content: nextContent }]);
-      const currentRepair = plan.repairs.find((repair) => repair.fileName === state.file.name);
-      if (currentRepair) await this.app.vault.modify(state.file, currentRepair.content);
+      const latestCurrent = await this.app.vault.read(state.writeFile);
+      const plan = planContinuationRepairs([{ fileName: state.writeFile.name, content: latestCurrent }, { fileName: nextFile.name, content: nextContent }]);
+      const currentRepair = plan.repairs.find((repair) => repair.fileName === state.writeFile.name); const expected = currentRepair ? parseContinuationSegment({ fileName: currentRepair.fileName, content: currentRepair.content }) : null;
+      if (expected) await this.app.vault.process(state.writeFile, (latest) => applyContinuationRepair(latest, expected.previousSegment, expected.nextSegment));
       await this.app.workspace.getLeaf(false).openFile(nextFile);
     } catch (error) { console.error("Solomon Chat: continuation failed", error); new Notice("The new page was created with its back-link. Reopen either page to repair the forward link."); }
   }
   private persistDraft(state: ViewState, immediate = false): void {
     const draft: DurableDraft = { conversationId: state.conversationId, filePath: state.file.path, text: state.draft, attachmentPaths: state.draftAttachments, updatedAt: Date.now(), operationId: state.operationId, operationSide: state.operationSide };
     this.drafts = upsertDraft(this.drafts, draft);
+    try { window.localStorage.setItem(this.emergencyDraftKey(), JSON.stringify(this.drafts)); } catch (error) { console.error("Solomon Chat: emergency draft mirror failed", error); }
     window.clearTimeout(this.draftTimer);
     if (immediate) void this.flushDrafts(); else this.draftTimer = window.setTimeout(() => void this.flushDrafts(), 350);
   }
-  private async flushDrafts(): Promise<void> { window.clearTimeout(this.draftTimer); this.draftTimer = 0; await this.saveData({ settings: this.settings, drafts: this.drafts }); }
+  private async flushDrafts(): Promise<void> {
+    window.clearTimeout(this.draftTimer); this.draftTimer = 0;
+    const snapshot = { settings: { ...this.settings }, drafts: normalizeDraftEnvelope(JSON.parse(JSON.stringify(this.drafts))) };
+    const save = this.draftSaveQueue.catch(() => undefined).then(() => this.saveData(snapshot)); this.draftSaveQueue = save; await save;
+    try { window.localStorage.setItem(this.emergencyDraftKey(), JSON.stringify(this.drafts)); } catch (error) { console.error("Solomon Chat: emergency draft mirror failed", error); }
+  }
+  private emergencyDraftKey(): string { return `solomon-chat:drafts:${this.app.vault.getName()}`; }
   private setOrDelete(fm: Frontmatter, key: string, value: string): void { if (value.trim()) fm[key] = value.trim(); else delete fm[key]; }
   private resizeTextarea(textarea: HTMLTextAreaElement): void { textarea.setCssProps({ height: "auto" }); textarea.setCssProps({ height: `${Math.min(textarea.scrollHeight, 144)}px` }); }
   private focusTextarea(textarea: HTMLTextAreaElement): void { textarea.focus({ preventScroll: true }); const end = textarea.value.length; textarea.setSelectionRange(end, end); }
   private formatTimestamp(value: string): string { const date = new Date(value.replace(" ", "T")); return Number.isNaN(date.valueOf()) ? value : date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }
+  private messageFingerprint(side: Side, timestamp: string, content: string): string { let hash = 2166136261; for (const char of `${side}\u0000${timestamp}\u0000${content}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619); return (hash >>> 0).toString(36); }
   private queue<T>(key: string, task: () => Promise<T>): Promise<T> { const previous = this.fileQueues.get(key) || Promise.resolve(); const next = previous.catch(() => undefined).then(task); this.fileQueues.set(key, next); const cleanup = () => { if (this.fileQueues.get(key) === next) this.fileQueues.delete(key); }; void next.then(cleanup, cleanup); return next; }
   private defaultAttachmentFolder(file: TFile): string { const parent = this.parentPath(file.path); return normalizePath(`${parent ? `${parent}/` : ""}${file.basename}.attachments`); }
   private parentPath(path: string): string { const normalized = normalizePath(path); const index = normalized.lastIndexOf("/"); return index < 0 ? "" : normalized.slice(0, index); }
@@ -583,4 +616,5 @@ export default class SolomonChatPlugin extends Plugin {
   private relativePath(fromFolder: string, target: string): string { const from = normalizePath(fromFolder).split("/").filter(Boolean); const to = normalizePath(target).split("/").filter(Boolean); let shared = 0; while (from[shared] === to[shared] && shared < from.length && shared < to.length) shared++; return [...from.slice(shared).map(() => ".."), ...to.slice(shared)].join("/"); }
   private frontmatterFor(file: TFile): Frontmatter { return Object.assign({}, this.app.metadataCache.getFileCache(file)?.frontmatter); }
   private frontmatterString(fm: Frontmatter, key: string): string { const value = fm[key]; return typeof value === "string" ? value.trim() : ""; }
+  private conversationFiles(conversationId: string): TFile[] { const files = this.app.vault.getMarkdownFiles().filter((file) => (this.frontmatterString(this.frontmatterFor(file), FM.conversationId) || this.frontmatterString(this.frontmatterFor(file), "conversation_id")) === conversationId); return files.length ? files : []; }
 }

@@ -24,7 +24,7 @@ Stop when deterministic lint, tests, and production build pass; an independent f
 | Attachment lifecycle | Deterministic complete | Cancel fallback, 100 MiB safety limit, persisted ownership, removable chips; physical pickers pending |
 | Durable continuation chain | Complete | Sortable sibling files, ordinary wikilinks, repair plan and plugin integration |
 | 10-segment/20,000-message scale | Complete | 10 segments, 20,000 unique messages, >=2.5 MiB synthetic test |
-| Independent P0/P1 critique | Pending | Fresh critic required after green checks |
+| Independent P0/P1 critique | Final review | Two critic rounds drove chain-wide idempotency, latest-content writes, lifecycle, modal, and keyed-render fixes; fresh final review pending |
 
 ## Test log
 
@@ -32,6 +32,8 @@ Stop when deterministic lint, tests, and production build pass; an independent f
 |---|---|---|
 | 2026-08-11 | Baseline preflight | Git ownership guard resolved for this exact worktree; baseline confirmed |
 | 2026-08-11 | Deterministic beta gate | 22 tests passed; typecheck/build/diff check passed; lint passed with one pre-existing settings-search warning |
+| 2026-08-11 | Critic revision gate | 23 tests passed after chain-tail mutations, latest-content repairs, synchronous emergency draft mirror, serialized saves, attachment rollback, and scroll-anchor fixes |
+| 2026-08-11 | Second critic revision | Fresh chain scan is serialized immediately before tail write; dirty dismiss guarded; keyed transcript nodes preserved across refresh |
 
 ## Non-negotiable boundaries
 

@@ -183,6 +183,11 @@ export function planContinuationRepairs(files: ContinuationFile[]): Continuation
   return { issues, repairs };
 }
 
+/** Applies expected neighbor identities to the latest file content. */
+export function applyContinuationRepair(content: string, previous: string | null, next: string | null): string {
+  return repairSegmentContent(content, previous, next);
+}
+
 function checkDirection(
   segment: ContinuationSegment,
   field: "previous" | "next",
