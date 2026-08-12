@@ -1,0 +1,3 @@
+artifact=beta-artifacts\solomon-chat-1.1.0-beta.5.zip
+sha256=e04f7ac7e29c8e000371def3e65df1b86bc8995fa02256d1ef07244e96741d06
+commit=33b1adc90058a31d325f24020e761fa09c88f1c0

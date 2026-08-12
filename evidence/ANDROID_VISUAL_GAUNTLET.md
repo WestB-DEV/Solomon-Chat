@@ -1,0 +1,49 @@
+# Solomon Chat Android Visual Gauntlet
+
+## Contract
+
+- Every revision is built as a production artifact, hashed, installed into the Android 15 emulator, and inspected inside Obsidian 1.13.6.
+- Gboard must be visible for keyboard checks; host-keyboard-only evidence does not count.
+- Browser-sized harnesses supplement deterministic tests but never substitute for Android evidence.
+- Each round receives an independent critic verdict against the approved mobile matrix.
+
+## Round log
+
+### Round 1 — `1.1.0-beta.2`
+
+- Builder target: measure Obsidian's floating `.mobile-navbar` even though it ends above Android's gesture inset.
+- Artifact SHA-256: `b2619978b9081029cfdca18fa23eb0296df1a2b326970d14b5bc658939dd2dbd`.
+- Commit: `9c531ba07070cf5bd7cd852f832d658eda2f131a`.
+- Deterministic checks: lint (one existing warning), 23 tests, typecheck, and production build passed.
+- Android result: portrait keyboard closed/open passed and the draft survived rotation, but landscape keyboard-open did not.
+- Independent critic: **FAIL — P1.** The speaker selector, attachment, and send controls were occluded by Gboard in `round-1-landscape-keyboard-open.png`.
+
+### Round 2 — `1.1.0-beta.3`
+
+- Builder target: consume Obsidian's native Capacitor keyboard-height event and keep the entire compact composer above Gboard in landscape.
+- Artifact SHA-256: `8d6b6c0aafbb52e950d3376e26d8583dd8e5f9e501207a0cbc5afd0c4a1d596f`.
+- Commit: `825582473d7708650f0236e24bb785f639de9c1f`.
+- Deterministic checks: lint (zero errors, one pre-existing settings-search warning), 23 tests, typecheck, and production build passed.
+- Exact revision verified inside Obsidian: manifest reports `1.1.0-beta.3`; staged `main.js`, `manifest.json`, and `styles.css` were hashed on-device.
+- Android matrix: portrait and landscape keyboard open/closed passed; actual Gboard remained visible; a long draft survived dismissal, reopening, and rotation; composer, speaker, attachment, and send controls remained visible and reachable; composer/nav overlap measured zero; composer-center hit testing resolved to Solomon rather than the underlying navbar.
+- Interaction checks: the long draft sent as `Me` with a stable message ID; the synthetic attachment picker opened, `attachment-fixture.txt` was selected, and the link sent as `Wise Friend` with a stable message ID.
+- Independent critic: **FAIL — P1.** After returning from the native attachment picker, Obsidian's upper-left floating navigation control overlapped the speaker selector in `round-2-attachment-selected.png`.
+
+### Round 3 — `1.1.0-beta.4`
+
+- Builder target: reserve the floating upper-left/right control zones in portrait keyboard-open mode while retaining the compact full-width landscape row.
+- Android result: portrait speaker control no longer overlapped the floating navigation after attachment return. Landscape with an attachment selected exposed a new P1: the full-width attachment tray wrapped the text and action row below Gboard.
+
+### Round 4 — `1.1.0-beta.5`
+
+- Builder target: keep the selected-attachment tray compact and inline in landscape keyboard-open mode so every control remains above Gboard.
+- Artifact SHA-256: `e04f7ac7e29c8e000371def3e65df1b86bc8995fa02256d1ef07244e96741d06`.
+- Commit: `33b1adc90058a31d325f24020e761fa09c88f1c0`.
+- Deterministic checks: lint (zero errors, one pre-existing settings-search warning), 23 tests, typecheck, and production build passed.
+- Android result: actual Obsidian 1.13.6 and visible Gboard passed portrait/landscape open, dismiss, reopen, and rotation. The compact attachment tray, draft, speaker selector, attach, and send controls all remained visible above Gboard. Closed-state composer/nav overlap measured zero and hit testing stayed within Solomon.
+- Persistence result: exact beta.5 long draft survived the closed/reopen cycle and sent as `Me` with stable ID `msg-bfe4a6a5-aa16-4a6c-9fc1-9fa4a2b26e3e`.
+- Independent critic: **PASS — no P0/P1 remains in the Android emulator matrix.** Physical iPhone and Boox checks remain separate release gates.
+
+## Final verdict
+
+**PASS — Android visual gauntlet complete.** The Android 15 emulator remains open in Obsidian for West's hands-on review. No public push or release was performed.
