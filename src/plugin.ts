@@ -179,6 +179,9 @@ export default class SolomonChatPlugin extends Plugin {
     const attach = composer.createEl("button", { cls: "solomon-chat-icon", attr: { "aria-label": "Attach files" } }); attach.type = "button"; setIcon(attach, "paperclip");
     const send = composer.createEl("button", { cls: "solomon-chat-send", attr: { "aria-label": "Send message" } }); send.type = "button"; setIcon(send, "arrow-up");
     const component = new Component(); component.load();
+    const hostObserver = new ResizeObserver(() => this.scheduleViewport());
+    hostObserver.observe(host);
+    component.register(() => hostObserver.disconnect());
     const conversationId = conversation.conversationId;
     const restored = this.drafts.drafts[draftKey(conversationId, file.path)] || this.drafts.drafts[draftKey("", file.path)];
     if (restored && !this.drafts.drafts[draftKey(conversationId, file.path)]) this.drafts = moveDraft(this.drafts, "", file.path, conversationId, file.path);

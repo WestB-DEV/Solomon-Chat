@@ -54,4 +54,11 @@
 ### Round 6 — `1.1.0-beta.7`
 
 - Builder target: use an explicit portrait keyboard-open grid with the speaker selector on row one and a full-width input/action row below it; retain the proven compact landscape flex row.
+- Android result: portrait Gboard open/dismiss/reopen and long-draft usability passed; rotation to landscape retained all controls; attachment return passed in landscape and portrait; the sent message preserved the selected `Wise Friend` attribution, stable message ID, and durable attachment Markdown.
+- Status: candidate passed the observed Android matrix; one platform-neutral container-observation refinement proceeds as beta.8 before final critique.
+
+### Round 7 — `1.1.0-beta.8`
+
+- Builder target: observe Obsidian's actual content host for size changes so the bounded plugin shell recomputes from container and VisualViewport geometry on both Android and iOS.
+- Cross-platform architecture: the leaf owns a `min-height: 0; overflow: hidden` grid; only the transcript scrolls; the composer remains in normal flow. VisualViewport `resize` and `scroll` drive the universal visible-rectangle calculation. Safe-area values are applied once at the shell. Capacitor keyboard height remains an isolated mobile-host fallback when the embedded Android WebView does not expose the keyboard shrink through VisualViewport; there are no fixed keyboard offsets.
 - Status: implementation in progress.
