@@ -24,7 +24,7 @@ Stop when deterministic lint, tests, and production build pass; an independent f
 | Attachment lifecycle | Deterministic complete | Cancel fallback, 100 MiB safety limit, persisted ownership, removable chips; physical pickers pending |
 | Durable continuation chain | Complete | Sortable sibling files, ordinary wikilinks, repair plan and plugin integration |
 | 10-segment/20,000-message scale | Complete | 10 segments, 20,000 unique messages, >=2.5 MiB synthetic test |
-| Independent P0/P1 critique | Final review | Two critic rounds drove chain-wide idempotency, latest-content writes, lifecycle, modal, and keyed-render fixes; fresh final review pending |
+| Independent P0/P1 critique | Complete | Fresh final critic found no P0 and one attachment-persistence P1; fixed by mirroring before filesystem await and reverified |
 
 ## Test log
 
