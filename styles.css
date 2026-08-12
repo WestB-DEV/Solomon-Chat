@@ -145,6 +145,7 @@
 
 @media (orientation: landscape) and (max-height: 500px) {
   .solomon-chat-root.is-keyboard-open .solomon-chat-composer textarea { max-height: 48px; }
+  .solomon-chat-root.is-keyboard-open .solomon-chat-attachment-tray { flex: 0 1 150px; max-height: 36px; min-width: 0; }
   .is-phone .solomon-chat-root.is-keyboard-open .solomon-chat-composer { padding-inline: 6px; }
 }
 
