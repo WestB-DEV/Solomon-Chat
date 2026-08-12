@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateNativeKeyboardOcclusion, calculateViewportLayout } from "../src/viewport";
+import { calculateNativeKeyboardOcclusion, calculateViewportLayout, resolveViewportLayout } from "../src/viewport";
 
 describe("mobile viewport layout", () => {
   it("does not double-count a native keyboard after the host leaf has already resized", () => {
@@ -43,5 +43,15 @@ describe("mobile viewport layout", () => {
 
   it("never enters mobile compose mode on desktop", () => {
     expect(calculateViewportLayout({ mobile: false, focused: true, layoutHeight: 900, visualHeight: 500, visualOffsetTop: 0, containerBottom: 850, closedToolbarClearance: 0 })).toEqual({ keyboardOpen: false, composeMode: false, bottomClearance: 0 });
+  });
+
+  it("honors a native hide event while WKWebView still reports stale keyboard geometry", () => {
+    const stale = calculateViewportLayout({ mobile: true, focused: true, layoutHeight: 844, visualHeight: 510, visualOffsetTop: 0, containerBottom: 790, closedToolbarClearance: 54 });
+    expect(resolveViewportLayout(stale, false, 0, true, 54)).toEqual({ keyboardOpen: false, composeMode: true, bottomClearance: 54 });
+  });
+
+  it("restores keyboard geometry after a later native show event", () => {
+    const open = calculateViewportLayout({ mobile: true, focused: true, layoutHeight: 844, visualHeight: 510, visualOffsetTop: 0, containerBottom: 790, closedToolbarClearance: 54 });
+    expect(resolveViewportLayout(open, true, 0, false, 54)).toEqual({ keyboardOpen: true, composeMode: true, bottomClearance: 280 });
   });
 });

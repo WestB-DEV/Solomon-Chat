@@ -7,7 +7,7 @@ import { draftKey, moveDraft, normalizeDraftEnvelope, upsertDraft, type DraftEnv
 import { FormModal } from "./modals";
 import { applySend, createStableId, currentTimestamp, ensureMessageIds, parseConversation, replaceMessageById, type Conversation } from "./model";
 import { SolomonSettingsTab } from "./settings";
-import { calculateNativeKeyboardOcclusion, calculateViewportLayout } from "./viewport";
+import { calculateNativeKeyboardOcclusion, calculateViewportLayout, resolveViewportLayout } from "./viewport";
 
 interface ViewState {
   leaf: WorkspaceLeaf;
@@ -56,9 +56,13 @@ export default class SolomonChatPlugin extends Plugin {
   private fileQueues = new Map<string, Promise<unknown>>();
   private refreshTokens = new WeakMap<WorkspaceLeaf, number>();
   private viewportFrame = 0;
-  private viewportTimer = 0;
+  private viewportGeneration = 0;
+  private viewportStableFrames = 0;
+  private viewportLastSignature = "";
+  private viewportSettleStarted = 0;
   private nativeKeyboardHeight = 0;
   private nativeKeyboardVisible = false;
+  private forceKeyboardClosed = false;
   private draftTimer = 0;
   private drafts: DraftEnvelope = { version: 1, drafts: {} };
   private draftSaveQueue: Promise<void> = Promise.resolve();
@@ -85,6 +89,9 @@ export default class SolomonChatPlugin extends Plugin {
     this.registerEvent(this.app.vault.on("modify", (file) => file instanceof TFile && this.scheduleFile(file)));
     this.registerEvent(this.app.metadataCache.on("changed", (file) => this.scheduleFile(file)));
     this.registerDomEvent(window, "resize", () => this.scheduleViewport());
+    this.registerDomEvent(window, "orientationchange", () => this.scheduleViewport());
+    this.registerDomEvent(window, "pageshow", () => this.scheduleViewport());
+    this.registerDomEvent(window, "focus", () => this.scheduleViewport());
     this.registerDomEvent(document, "visibilitychange", () => { if (document.visibilityState === "hidden") void this.flushDrafts(); });
     if (window.visualViewport) {
       const update = () => this.scheduleViewport();
@@ -98,7 +105,6 @@ export default class SolomonChatPlugin extends Plugin {
 
   onunload(): void {
     if (this.viewportFrame) window.cancelAnimationFrame(this.viewportFrame);
-    if (this.viewportTimer) window.clearTimeout(this.viewportTimer);
     if (this.draftTimer) window.clearTimeout(this.draftTimer);
     void this.flushDrafts();
     for (const leaf of [...this.states.keys()]) this.teardown(leaf);
@@ -502,8 +508,29 @@ export default class SolomonChatPlugin extends Plugin {
   }
 
   private scheduleViewport(): void {
-    if (!this.viewportFrame) this.viewportFrame = window.requestAnimationFrame(() => { this.viewportFrame = 0; for (const state of this.states.values()) this.applyViewport(state); });
-    window.clearTimeout(this.viewportTimer); this.viewportTimer = window.setTimeout(() => { this.viewportTimer = 0; for (const state of this.states.values()) this.applyViewport(state); }, 160);
+    const generation = ++this.viewportGeneration;
+    this.viewportStableFrames = 0;
+    this.viewportLastSignature = "";
+    this.viewportSettleStarted = performance.now();
+    if (this.viewportFrame) window.cancelAnimationFrame(this.viewportFrame);
+    this.viewportFrame = window.requestAnimationFrame(() => this.sampleViewport(generation));
+  }
+
+  private sampleViewport(generation: number): void {
+    if (generation !== this.viewportGeneration) return;
+    this.viewportFrame = 0;
+    for (const state of this.states.values()) this.applyViewport(state);
+    const vv = window.visualViewport;
+    const roots = [...this.states.values()].map((state) => {
+      const rect = state.root.getBoundingClientRect();
+      return `${Math.round(rect.top)}:${Math.round(rect.bottom)}:${Math.round(rect.height)}`;
+    }).join("|");
+    const signature = [window.innerWidth, window.innerHeight, Math.round(vv?.height || window.innerHeight), Math.round(vv?.offsetTop || 0), vv?.scale || 1, roots].join(":");
+    this.viewportStableFrames = signature === this.viewportLastSignature ? this.viewportStableFrames + 1 : 1;
+    this.viewportLastSignature = signature;
+    const elapsed = performance.now() - this.viewportSettleStarted;
+    if ((this.viewportStableFrames >= 2 && elapsed >= 64) || elapsed >= 500) return;
+    this.viewportFrame = window.requestAnimationFrame(() => this.sampleViewport(generation));
   }
 
   private registerNativeKeyboard(): void {
@@ -518,11 +545,13 @@ export default class SolomonChatPlugin extends Plugin {
     void listen("keyboardDidShow", (info) => {
       this.nativeKeyboardVisible = true;
       this.nativeKeyboardHeight = Math.max(0, Math.round(info.keyboardHeight || 0));
+      this.forceKeyboardClosed = false;
       this.scheduleViewport();
     });
     void listen("keyboardDidHide", () => {
       this.nativeKeyboardVisible = false;
       this.nativeKeyboardHeight = 0;
+      this.forceKeyboardClosed = true;
       this.scheduleViewport();
     });
   }
@@ -533,10 +562,12 @@ export default class SolomonChatPlugin extends Plugin {
     const focused = state.focused || state.composer.contains(document.activeElement);
     const closedToolbarClearance = Platform.isMobile ? this.measureBottomToolbar(state.root) : 0;
     const layout = calculateViewportLayout({ mobile: Platform.isMobile, focused, layoutHeight: window.innerHeight, visualHeight: vv?.height || window.innerHeight, visualOffsetTop: vv?.offsetTop || 0, containerBottom: rect.bottom, closedToolbarClearance });
+    if (this.forceKeyboardClosed && !layout.keyboardOpen) this.forceKeyboardClosed = false;
     const nativeKeyboardOpen = focused && this.nativeKeyboardVisible && this.nativeKeyboardHeight > 0;
     const nativeOcclusion = nativeKeyboardOpen ? calculateNativeKeyboardOcclusion(rect.bottom, window.innerHeight, this.nativeKeyboardHeight) : 0;
-    state.root.classList.toggle("is-compose-mode", layout.composeMode || nativeKeyboardOpen); state.root.classList.toggle("is-keyboard-open", layout.keyboardOpen || nativeKeyboardOpen);
-    state.root.style.setProperty("--solomon-bottom-clearance", `${Math.max(layout.bottomClearance, nativeOcclusion)}px`);
+    const effective = resolveViewportLayout(layout, nativeKeyboardOpen, nativeOcclusion, this.forceKeyboardClosed, closedToolbarClearance);
+    state.root.classList.toggle("is-compose-mode", effective.composeMode); state.root.classList.toggle("is-keyboard-open", effective.keyboardOpen);
+    state.root.style.setProperty("--solomon-bottom-clearance", `${effective.bottomClearance}px`);
   }
 
   private measureBottomToolbar(root: HTMLElement): number {

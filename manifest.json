@@ -1,7 +1,7 @@
 {
   "id": "solomon-chat",
   "name": "Solomon Chat",
-  "version": "1.1.0-beta.10",
+  "version": "1.1.0-beta.11",
   "minAppVersion": "1.6.6",
   "description": "A calm, Markdown-first two-sided chat for self-distanced journaling and reflection.",
   "author": "WestB",
