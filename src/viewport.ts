@@ -21,9 +21,18 @@ export function calculateViewportLayout(input: ViewportInput): ViewportLayout {
   const keyboardOpen = input.focused && keyboardDelta > 100;
   const visibleBottom = input.visualOffsetTop + input.visualHeight;
   const keyboardClearance = Math.max(0, input.containerBottom - visibleBottom);
+  // Some Android Obsidian/WebView combinations resize the plugin container while
+  // leaving both innerHeight and visualViewport unchanged. In that mode the host
+  // has already cleared the keyboard, so retaining the closed toolbar inset would
+  // create a large, duplicate gap above the IME.
+  const keyboardHandledByHost = input.focused && !keyboardOpen && visibleBottom - input.containerBottom > 100;
   return {
     keyboardOpen,
     composeMode: input.focused,
-    bottomClearance: keyboardOpen ? Math.round(keyboardClearance) : Math.max(0, input.closedToolbarClearance),
+    bottomClearance: keyboardOpen
+      ? Math.round(keyboardClearance)
+      : keyboardHandledByHost
+        ? 0
+        : Math.max(0, input.closedToolbarClearance),
   };
 }

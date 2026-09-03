@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Solomon Chat mobile layout harness</title>
-  <link rel="stylesheet" href="../styles.css?v=2">
+  <link rel="stylesheet" href="../styles.css?v=6">
   <style>
     :root { --background-primary:#fff; --background-primary-alt:#f7f7f8; --background-secondary:#f0f0f2; --background-modifier-border:#e4e4e7; --background-modifier-hover:#ececef; --interactive-accent:#8b6cef; --text-normal:#1f2023; --text-muted:#6b6b70; --text-faint:#9a9aa0; --text-on-accent:#fff; --size-4-1:4px; --size-4-2:8px; --size-4-3:12px; --radius-l:12px; --radius-m:8px; --font-ui-smaller:12px; --font-ui-small:13px; }
     * { box-sizing:border-box; }
@@ -32,7 +32,7 @@
     .solomon-chat-bubble p { margin:0; }
     body.is-capture .harness { grid-template-rows:1fr; }
     body.is-capture .harness-controls { display:none; }
-    body.is-desktop .workspace { box-shadow:0 22px 55px #17171a38; height:calc(100% - 56px); margin:28px; max-width:1320px; }
+    body.is-desktop .workspace { box-shadow:0 22px 55px #17171a38; height:calc(100% - 56px); margin:28px; max-width:1320px; width:calc(100% - 56px); }
     body.is-desktop .desktop-sidebar, body.is-desktop .desktop-titlebar { display:block; }
     body.is-desktop .desktop-titlebar { display:flex; }
     body.is-desktop .phone { max-height:none; max-width:none; }
@@ -42,6 +42,7 @@
     body.is-phone-capture .harness { height:calc(100vh - 44px); }
     body.is-phone-capture .workspace { border:8px solid #1d1d20; border-radius:34px; box-shadow:0 18px 45px #17171a40; max-width:406px; }
     body.is-phone-capture .phone { border-radius:25px; }
+    body.is-unframed .phone { max-height:none; max-width:none; }
     body.theme-dark { --background-primary:#1e1e1e; --background-primary-alt:#242426; --background-secondary:#2f2f33; --background-modifier-border:#3a3a3e; --background-modifier-hover:#333336; --interactive-accent:#8b6cef; --text-normal:#dcdcde; --text-muted:#9d9da3; --text-faint:#6d6d73; --text-on-accent:#fff; background:#111; }
     body.theme-dark .desktop-sidebar { background:#262626; border-color:#383838; color:#a5a5ab; }
     body.theme-dark .desktop-sidebar strong, body.theme-dark .desktop-sidebar .is-active { color:#e6e6e8; }
@@ -49,6 +50,17 @@
     body.theme-dark .desktop-titlebar { background:#1e1e1e; border-color:#303032; color:#9d9da3; }
     body.theme-dark .keyboard { background:linear-gradient(#2f3033,#252629); }
     body.theme-dark .key { background:#55565a; color:#fff; }
+    body.is-large-text { --font-text-size:22px; --font-ui-small:18px; --font-ui-smaller:16px; }
+    body.is-accessibility-text { --font-text-size:28px; --font-ui-small:22px; --font-ui-smaller:20px; }
+    .harness-modal-layer { align-items:center; background:#0008; display:flex; inset:0; justify-content:center; padding:20px; position:absolute; z-index:30; }
+    .harness-modal-layer[hidden] { display:none; }
+    .harness-modal { background:var(--background-primary); border-radius:16px; box-shadow:0 18px 60px #0005; color:var(--text-normal); max-width:430px; padding:20px; width:100%; }
+    .harness-modal h2 { font-size:20px; margin:0 0 10px; }
+    .harness-modal p { color:var(--text-muted); line-height:1.5; }
+    .harness-modal .modal-button-container { display:flex; gap:8px; justify-content:flex-end; }
+    .harness-modal .modal-button-container button { min-height:40px; }
+    .harness-modal .mod-warning { background:#d9363e; color:white; }
+    @media (max-width:700px) { .harness-modal .modal-button-container button { min-height:48px; } }
     @media (prefers-color-scheme:dark) { body { background:#111; } }
   </style>
 </head>
@@ -75,28 +87,61 @@
       <div class="view-content solomon-chat-active">
         <section class="solomon-chat-root" aria-label="Solomon Chat test conversation">
           <header class="solomon-chat-header">
-            <div class="solomon-chat-people">
-              <button class="solomon-chat-person is-left"><span class="solomon-chat-initial">S</span><span>Solomon</span></button>
-              <span class="solomon-chat-title">A hard decision</span>
-              <button class="solomon-chat-person is-right"><span class="solomon-chat-initial">M</span><span>Me</span></button>
+            <div class="solomon-chat-context">
+              <div class="solomon-chat-pair" aria-hidden="true">
+                <div class="solomon-chat-avatar is-left"><span class="solomon-chat-initial">S</span></div>
+                <div class="solomon-chat-avatar is-right"><span class="solomon-chat-initial">M</span></div>
+              </div>
+              <div class="solomon-chat-heading">
+                <div class="solomon-chat-title">A hard decision</div>
+                <div class="solomon-chat-participants">Solomon &amp; Me</div>
+              </div>
             </div>
-            <div class="solomon-chat-actions"><button class="solomon-chat-icon">✦</button><button class="solomon-chat-icon">☰</button><button class="solomon-chat-icon">⌁</button></div>
+            <div class="solomon-chat-actions"><button class="solomon-chat-icon" aria-label="Conversation actions"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
           </header>
           <div class="solomon-chat-messages">
-            <article class="solomon-chat-message is-right"><div class="solomon-chat-meta">Me · 9:12 AM</div><div class="solomon-chat-bubble"><p>I keep going in circles about this decision.</p></div></article>
-            <article class="solomon-chat-message is-left"><div class="solomon-chat-meta">Solomon · 9:13 AM</div><div class="solomon-chat-bubble"><p>If a close friend brought you this problem, what would you tell them?</p></div></article>
-            <article class="solomon-chat-message is-right"><div class="solomon-chat-meta">Me · 9:14 AM</div><div class="solomon-chat-bubble"><p>I would tell them they do not need perfect certainty before taking one small step.</p></div></article>
-            <article class="solomon-chat-message is-left"><div class="solomon-chat-meta">Solomon · 9:15 AM</div><div class="solomon-chat-bubble"><p>What is one reversible step you could take today?</p></div></article>
-            <article class="solomon-chat-message is-right"><div class="solomon-chat-meta">Me · 9:16 AM</div><div class="solomon-chat-bubble"><p>I can write the first page, send it to one person I trust, and learn from their reaction.</p></div></article>
+            <button class="solomon-chat-load-earlier" type="button">Show earlier messages (1,800)</button>
+            <article class="solomon-chat-message is-right"><div class="solomon-chat-meta">Me · 9:12 AM</div><div class="solomon-chat-message-row"><div class="solomon-chat-bubble"><p>I keep going in circles about this decision.</p></div><div class="solomon-chat-message-actions"><button class="solomon-chat-message-action" aria-label="Actions for Me's message"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div></div></article>
+            <article class="solomon-chat-message is-left"><div class="solomon-chat-meta">Solomon · 9:13 AM</div><div class="solomon-chat-message-row"><div class="solomon-chat-bubble"><p>If a close friend brought you this problem, what would you tell them?</p></div><div class="solomon-chat-message-actions"><button class="solomon-chat-message-action" aria-label="Actions for Solomon's message"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div></div></article>
+            <article class="solomon-chat-message is-right"><div class="solomon-chat-meta">Me · 9:14 AM</div><div class="solomon-chat-message-row"><div class="solomon-chat-bubble"><p>I would tell them they do not need perfect certainty before taking one small step.</p></div><div class="solomon-chat-message-actions"><button class="solomon-chat-message-action" aria-label="Actions for Me's message"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div></div></article>
+            <article class="solomon-chat-message is-left"><div class="solomon-chat-meta">Solomon · 9:15 AM</div><div class="solomon-chat-message-row"><div class="solomon-chat-bubble"><p>What is one reversible step you could take today?</p></div><div class="solomon-chat-message-actions"><button class="solomon-chat-message-action" aria-label="Actions for Solomon's message"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div></div></article>
+            <article class="solomon-chat-message is-right"><div class="solomon-chat-meta">Me · 9:16 AM</div><div class="solomon-chat-message-row"><div class="solomon-chat-bubble"><p>I can write the first page, send it to one person I trust, and learn from their reaction.</p></div><div class="solomon-chat-message-actions"><button class="solomon-chat-message-action" aria-label="Actions for Me's message"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div></div></article>
           </div>
-          <footer class="solomon-chat-composer"><button class="solomon-chat-sender">Me</button><textarea rows="1" placeholder="Message as Me"></textarea><button class="solomon-chat-icon">⌕</button><button class="solomon-chat-send">↑</button></footer>
+          <button class="solomon-chat-jump-latest" aria-label="Jump to latest message" aria-hidden="true" tabindex="-1"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m6 9 6 6 6-6"/></svg><span>Latest</span></button>
+          <footer class="solomon-chat-composer">
+            <div class="solomon-chat-speaker-switch" role="group" aria-label="Choose who is speaking">
+              <button class="solomon-chat-speaker is-left" aria-pressed="false">Solomon</button>
+              <button class="solomon-chat-speaker is-right" aria-pressed="true">Me</button>
+            </div>
+            <div class="solomon-chat-attachment-tray" aria-label="Files ready to send">
+              <div class="solomon-chat-attachment">
+                <span class="solomon-chat-attachment-icon" aria-hidden="true"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+                <span class="solomon-chat-attachment-details"><span class="solomon-chat-attachment-name">reflection-notes.pdf</span><span class="solomon-chat-attachment-size">1.4 MB</span></span>
+                <button class="solomon-chat-attachment-remove" aria-label="Remove reflection-notes.pdf"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="m18 6-12 12M6 6l12 12"/></svg></button>
+              </div>
+            </div>
+            <div class="solomon-chat-compose-row">
+              <button class="solomon-chat-icon" aria-label="Attach files"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.6-8.6"/></svg></button>
+              <textarea rows="1" placeholder="Message…" aria-label="Message"></textarea>
+              <button class="solomon-chat-send" aria-label="Send as Me"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="m5 12 7-7 7 7M12 19V5"/></svg></button>
+            </div>
+          </footer>
         </section>
+        <div class="harness-modal-layer" hidden>
+          <section class="harness-modal solomon-chat-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+            <h2 id="delete-title">Delete this message?</h2>
+            <p>This removes the message from the Markdown conversation. Attached files stay in the vault.</p>
+            <div class="solomon-chat-confirm-preview">I can write the first page, send it to one person I trust, and learn from their reaction.</div>
+            <div class="solomon-chat-confirm-status" role="alert"></div>
+            <div class="modal-button-container"><button>Cancel</button><button class="mod-warning">Delete message</button></div>
+          </section>
+        </div>
       </div>
       <nav class="mobile-toolbar"><span>‹</span><span>⌘</span><span>＋</span><span>≡</span></nav>
       <div class="keyboard"><div class="keyboard-row"><i class="key">Q</i><i class="key">W</i><i class="key">E</i><i class="key">R</i><i class="key">T</i><i class="key">Y</i><i class="key">U</i><i class="key">I</i><i class="key">O</i><i class="key">P</i></div><div class="keyboard-row"><i class="key">A</i><i class="key">S</i><i class="key">D</i><i class="key">F</i><i class="key">G</i><i class="key">H</i><i class="key">J</i><i class="key">K</i><i class="key">L</i></div><div class="keyboard-row"><i class="key">Z</i><i class="key">X</i><i class="key">C</i><i class="key">V</i><i class="key">B</i><i class="key">N</i><i class="key">M</i></div><div class="keyboard-label">simulated iPhone keyboard for layout testing</div></div>
       </main>
     </div>
   </div>
-  <script src="mobile-harness.js"></script>
+  <script src="mobile-harness.js?v=6"></script>
 </body>
 </html>

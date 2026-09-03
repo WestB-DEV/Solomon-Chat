@@ -60,31 +60,38 @@ Every conversation is a normal Markdown file. There is no hidden message databas
 ```md
 ---
 solomon-chat: true
+conversation-id: "conversation-8f21c4d1"
 left-name: Solomon
 right-name: Me
 next-side: right
+attachment-folder: "Solomon Conversations/Example.attachments"
 ---
 
-[right, 2026-07-19 09:12]
+<!-- solomon-chat:right|2026-07-19 09:12|msg-a1b2c3 -->
+### Me · 2026-07-19 09:12
+
 I keep going in circles about this decision.
 
-[left, 2026-07-19 09:13]
+<!-- solomon-chat:left|2026-07-19 09:13|msg-d4e5f6 -->
+### Solomon · 2026-07-19 09:13
+
 If a close friend brought you this problem, what would you tell them?
 ```
 
-Images and files use ordinary Markdown links. Participant names, bios, and avatar paths use readable frontmatter. Raw Markdown mode and plain text transcript export are always available.
+The small HTML comments preserve message identity and speaker position while remaining hidden in normal Markdown reading views. The speaker headings and message bodies are standard Markdown, and images and files use ordinary relative Markdown links. Participant names, bios, and avatar paths use readable frontmatter. Raw Markdown mode and plain text transcript export are always available. Existing bracket-marker conversations remain supported.
 
 ## Features
 
 - Familiar left and right message bubbles with automatic speaker switching
 - Editable participant names, bios, colors, and optional vault-image avatars
-- Picture and file attachments stored beside the conversation
+- Picture and file attachments stored in message-specific subfolders beside the conversation, with ordinary relative Markdown links
 - Enter to send and Shift+Enter for a new line
-- Message editing and deletion by right-click or long-press
+- Discoverable message actions by tap, keyboard focus, right-click, or long-press; deletion requires confirmation
 - Optional perspective prompts inspired by self-distancing research
 - Raw Markdown mode and readable text transcript export
 - Separate desktop, iPhone, and Android keyboard layout behavior
 - Serialized file writes so rapid sends cannot overwrite one another
+- A fast 200-message initial history window with stable-position loading for earlier messages
 - No account, analytics, AI API, or network transmission
 
 ## Install

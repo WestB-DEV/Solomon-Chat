@@ -1,5 +1,6 @@
 export const FM = {
   flag: "solomon-chat",
+  conversationId: "conversation-id",
   leftName: "left-name",
   rightName: "right-name",
   nextSide: "next-side",
@@ -32,7 +33,7 @@ export const DEFAULT_SETTINGS: SolomonSettings = {
   conversationFolder: "Solomon Conversations",
   useThemeColors: true,
   leftBubbleColor: "#e9e9eb",
-  rightBubbleColor: "#8b6cef",
+  rightBubbleColor: "#7652d6",
   leftTextColor: "#1c1c1e",
   rightTextColor: "#ffffff",
   showTimestamps: true,

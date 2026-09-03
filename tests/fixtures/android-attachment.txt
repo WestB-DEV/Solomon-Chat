@@ -1,0 +1,3 @@
+Solomon Chat attachment acceptance fixture.
+
+This plain-text file verifies that a document selected on Android is copied into the conversation attachment folder and linked from readable Markdown.
