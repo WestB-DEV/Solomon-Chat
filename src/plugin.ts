@@ -1,5 +1,5 @@
 import {
-  Component, MarkdownRenderer, MarkdownView, Menu, Notice, Plugin, Platform, TFile, TFolder, WorkspaceLeaf, normalizePath, setIcon,
+  Component, MarkdownRenderer, MarkdownView, Menu, Notice, Plugin, Platform, TFile, TFolder, TextFileView, WorkspaceLeaf, normalizePath, setIcon,
 } from "obsidian";
 import { attachmentMarkdown, attachmentValidationError, formatAttachmentSize, isImageAttachment } from "./attachments";
 import { DEFAULT_SETTINGS, FM, PERSPECTIVE_PROMPTS, type Side, type SolomonSettings } from "./constants";
@@ -8,19 +8,18 @@ import { earlierMessageCount, initialVisibleStart, previousVisibleStart } from "
 import { ConfirmModal, FormModal } from "./modals";
 import { appendMessageTransaction, currentTimestamp, hasMessageId, parseConversation, replaceTargetMessage, type ChatMessage, type Conversation } from "./model";
 import { SolomonSettingsTab } from "./settings";
+import { shouldRouteToChat, shouldSubmitComposerKey } from "./ui-behavior";
 import { calculateViewportLayout } from "./viewport";
 
 interface ViewState {
   leaf: WorkspaceLeaf;
   file: TFile;
   root: HTMLElement;
-  header: HTMLElement;
   messages: HTMLElement;
   jumpToLatest: HTMLButtonElement;
   composer: HTMLElement;
   textarea: HTMLTextAreaElement;
-  leftSender: HTMLButtonElement;
-  rightSender: HTMLButtonElement;
+  sender: HTMLButtonElement;
   attachmentTray: HTMLElement;
   attach: HTMLButtonElement;
   send: HTMLButtonElement;
@@ -53,6 +52,37 @@ interface ScrollAnchor {
 
 type Frontmatter = Record<string, unknown>;
 
+export const SOLOMON_CHAT_VIEW_TYPE = "solomon-chat-view";
+
+class SolomonChatView extends TextFileView {
+  private action: HTMLElement;
+
+  constructor(leaf: WorkspaceLeaf, private owner: SolomonChatPlugin) {
+    super(leaf);
+    this.navigation = true;
+    this.contentEl.addClass("solomon-chat-view-content");
+    this.action = this.addAction("ellipsis", "Conversation actions", () => this.owner.openConversationActions(this.leaf, this.action));
+  }
+
+  getViewType(): string { return SOLOMON_CHAT_VIEW_TYPE; }
+  getDisplayText(): string { return this.file?.basename || "Solomon Chat"; }
+  getIcon(): string { return "messages-square"; }
+  getViewData(): string { return this.data; }
+  setViewData(data: string, clear: boolean): void {
+    this.data = data;
+    this.owner.renderViewData(this, data, clear);
+  }
+  clear(): void {
+    this.data = "";
+    this.owner.teardownView(this.leaf);
+  }
+  protected async onClose(): Promise<void> {
+    this.owner.teardownView(this.leaf);
+    this.contentEl.removeClass("solomon-chat-view-content");
+    await super.onClose();
+  }
+}
+
 interface SolomonPluginData {
   pendingAttachmentCleanups: PendingCleanupMap;
   version: 2;
@@ -71,6 +101,7 @@ export default class SolomonChatPlugin extends Plugin {
   private reconcilingFiles = new Set<TFile>();
   private cleanupReconciliations = new Set<string>();
   private rawLeaves = new WeakMap<WorkspaceLeaf, string>();
+  private routingLeaves = new WeakSet<WorkspaceLeaf>();
   private fileQueues = new Map<string, Promise<unknown>>();
   private refreshTokens = new WeakMap<WorkspaceLeaf, number>();
   private refreshTimers = new Map<WorkspaceLeaf, number>();
@@ -87,13 +118,16 @@ export default class SolomonChatPlugin extends Plugin {
       : draftContainer;
     this.drafts = parseDraftMap(storedDrafts);
     this.pendingAttachmentCleanups = parsePendingCleanupMap(loaded?.pendingAttachmentCleanups);
+    this.registerView(SOLOMON_CHAT_VIEW_TYPE, (leaf) => new SolomonChatView(leaf, this));
     this.addRibbonIcon("messages-square", "Create a conversation", () => this.openCreateModal());
     this.addCommand({ id: "create-conversation", name: "Create new conversation", callback: () => this.openCreateModal() });
     this.addCommand({ id: "edit-participants", name: "Edit conversation participants", checkCallback: (checking) => this.withActiveConversation(checking, (file) => this.openParticipantsModal(file)) });
     this.addCommand({ id: "switch-speaker", name: "Switch active speaker", checkCallback: (checking) => this.withActiveConversation(checking, (file) => void this.switchSpeaker(file)) });
-    this.addCommand({ id: "toggle-raw-markdown", name: "Toggle chat and raw Markdown", checkCallback: (checking) => this.withActiveConversation(checking, () => {
-      const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-      if (view) this.toggleRaw(view.leaf);
+    this.addCommand({ id: "toggle-raw-markdown", name: "Toggle chat and raw Markdown", checkCallback: (checking) => this.withActiveConversation(checking, (_file, leaf) => {
+      if (!checking) void this.toggleRaw(leaf);
+    }) });
+    this.addCommand({ id: "open-chat-view", name: "Open in chat view", checkCallback: (checking) => this.withActiveConversation(checking, (file, leaf) => {
+      if (!checking) void this.openChatFile(file, leaf);
     }) });
     this.addCommand({ id: "export-transcript", name: "Export readable transcript", checkCallback: (checking) => this.withActiveConversation(checking, (file) => void this.exportTranscript(file)) });
     this.addSettingTab(new SolomonSettingsTab(this.app, this));
@@ -130,13 +164,18 @@ export default class SolomonChatPlugin extends Plugin {
     for (const timer of this.refreshTimers.values()) window.clearTimeout(timer);
     this.refreshTimers.clear();
     void this.savePluginData().catch((error) => console.error("Solomon Chat: unload save failed", error));
-    for (const leaf of [...this.states.keys()]) this.teardown(leaf);
+    for (const leaf of [...this.states.keys()]) {
+      const file = this.fileForLeaf(leaf);
+      this.teardown(leaf);
+      if (file && leaf.view instanceof SolomonChatView) void leaf.setViewState({ type: "markdown", state: { file: file.path } });
+    }
   }
 
   async saveSettings(): Promise<void> { await this.savePluginData(); }
 
   refreshAllLeaves(): void {
-    for (const leaf of this.app.workspace.getLeavesOfType("markdown")) this.scheduleLeaf(leaf);
+    for (const leaf of this.app.workspace.getLeavesOfType(SOLOMON_CHAT_VIEW_TYPE)) this.scheduleLeaf(leaf);
+    void this.routeMarkdownLeaves();
   }
 
   private scheduleAll(): void {
@@ -146,9 +185,10 @@ export default class SolomonChatPlugin extends Plugin {
 
   private scheduleFile(file: TFile): void {
     if (file.extension !== "md") return;
-    for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-      if (leaf.view instanceof MarkdownView && leaf.view.file?.path === file.path) this.scheduleLeaf(leaf);
+    for (const leaf of this.app.workspace.getLeavesOfType(SOLOMON_CHAT_VIEW_TYPE)) {
+      if (leaf.view instanceof SolomonChatView && leaf.view.file?.path === file.path) this.scheduleLeaf(leaf);
     }
+    void this.routeMarkdownLeaves();
   }
 
   private scheduleLeaf(leaf: WorkspaceLeaf): void {
@@ -160,47 +200,102 @@ export default class SolomonChatPlugin extends Plugin {
   }
 
   private async refreshLeaf(leaf: WorkspaceLeaf): Promise<void> {
-    if (!(leaf.view instanceof MarkdownView)) return;
+    if (!(leaf.view instanceof SolomonChatView)) return;
     const file = leaf.view.file;
     if (!(file instanceof TFile) || file.extension !== "md") return this.teardown(leaf);
-    if (this.rawLeaves.get(leaf) === file.path) return this.teardown(leaf);
     const token = (this.refreshTokens.get(leaf) || 0) + 1;
     this.refreshTokens.set(leaf, token);
     const content = await this.app.vault.cachedRead(file);
-    if (this.refreshTokens.get(leaf) !== token || leaf.view.file?.path !== file.path) return;
+    if (this.refreshTokens.get(leaf) !== token || !(leaf.view instanceof SolomonChatView) || leaf.view.file?.path !== file.path) return;
     const conversation = parseConversation(content, this.frontmatterFor(file), {
       leftName: this.settings.defaultLeftName,
       rightName: this.settings.defaultRightName,
       attachmentFolder: this.defaultAttachmentFolder(file),
     });
-    if (!conversation.isConversation) return this.teardown(leaf);
+    if (!conversation.isConversation) return void this.openMarkdownFile(file, leaf);
     this.render(leaf, file, conversation);
   }
 
+  renderViewData(view: SolomonChatView, data: string, _clear: boolean): void {
+    const file = view.file;
+    if (!(file instanceof TFile)) return;
+    const conversation = parseConversation(data, this.frontmatterFor(file), {
+      leftName: this.settings.defaultLeftName,
+      rightName: this.settings.defaultRightName,
+      attachmentFolder: this.defaultAttachmentFolder(file),
+    });
+    if (!conversation.isConversation) { void this.openMarkdownFile(file, view.leaf); return; }
+    this.render(view.leaf, file, conversation);
+  }
+
+  teardownView(leaf: WorkspaceLeaf): void { this.teardown(leaf); }
+
+  private async routeMarkdownLeaves(): Promise<void> {
+    for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+      if (!(leaf.view instanceof MarkdownView) || this.routingLeaves.has(leaf)) continue;
+      const file = leaf.view.file;
+      if (!(file instanceof TFile) || file.extension !== "md") continue;
+      if (this.rawLeaves.get(leaf) === file.path) continue;
+      try {
+        const content = await this.app.vault.cachedRead(file);
+        if (!(leaf.view instanceof MarkdownView) || leaf.view.file?.path !== file.path) continue;
+        const conversation = parseConversation(content, this.frontmatterFor(file), {
+          leftName: this.settings.defaultLeftName,
+          rightName: this.settings.defaultRightName,
+          attachmentFolder: this.defaultAttachmentFolder(file),
+        });
+        if (shouldRouteToChat({ conversation: conversation.isConversation, filePath: file.path, markdownView: true, rawPath: this.rawLeaves.get(leaf), routing: this.routingLeaves.has(leaf) })) await this.openChatFile(file, leaf);
+      } catch (error) { console.error("Solomon Chat: could not route a conversation view", error); }
+    }
+  }
+
+  private async openChatFile(file: TFile, leaf: WorkspaceLeaf): Promise<void> {
+    if (this.routingLeaves.has(leaf)) return;
+    this.routingLeaves.add(leaf);
+    this.rawLeaves.delete(leaf);
+    try {
+      await leaf.setViewState({ type: SOLOMON_CHAT_VIEW_TYPE, state: { file: file.path }, active: true });
+    } finally { this.routingLeaves.delete(leaf); }
+  }
+
+  private async openMarkdownFile(file: TFile, leaf: WorkspaceLeaf): Promise<void> {
+    if (this.routingLeaves.has(leaf)) return;
+    this.routingLeaves.add(leaf);
+    this.rawLeaves.set(leaf, file.path);
+    this.teardown(leaf);
+    try {
+      await leaf.setViewState({ type: "markdown", state: { file: file.path, mode: "source" }, active: true });
+    } finally { this.routingLeaves.delete(leaf); }
+  }
+
+  private fileForLeaf(leaf: WorkspaceLeaf): TFile | null {
+    const view = leaf.view;
+    return view instanceof SolomonChatView || view instanceof MarkdownView ? view.file : null;
+  }
+
   private createState(leaf: WorkspaceLeaf, file: TFile, conversation: Conversation): ViewState {
-    if (!(leaf.view instanceof MarkdownView)) throw new Error("Solomon Chat requires a Markdown view");
-    const host = leaf.view.containerEl.querySelector<HTMLElement>(".view-content") || leaf.view.contentEl;
+    if (!(leaf.view instanceof SolomonChatView)) throw new Error("Solomon Chat requires its registered chat view");
+    const host = leaf.view.contentEl;
+    host.empty();
     const root = host.createDiv({ cls: "solomon-chat-root" });
     root.classList.toggle("is-mobile", Platform.isMobile);
-    const header = root.createDiv({ cls: "solomon-chat-header" });
     const messages = root.createDiv({ cls: "solomon-chat-messages", attr: { role: "log", "aria-label": "Conversation messages" } });
     const jumpToLatest = root.createEl("button", { cls: "solomon-chat-jump-latest", attr: { "aria-label": "Jump to latest message", "aria-hidden": "true" } });
     jumpToLatest.type = "button"; jumpToLatest.tabIndex = -1; setIcon(jumpToLatest, "arrow-down"); jumpToLatest.createSpan({ text: "Latest" });
     const announcer = root.createDiv({ cls: "solomon-chat-announcer", attr: { "aria-live": "polite", "aria-atomic": "true" } });
     const composer = root.createDiv({ cls: "solomon-chat-composer" });
-    const speakerSwitch = composer.createDiv({ cls: "solomon-chat-speaker-switch", attr: { role: "group", "aria-label": "Choose who is speaking" } });
-    const leftSender = speakerSwitch.createEl("button", { cls: "solomon-chat-speaker is-left" }); leftSender.type = "button";
-    const rightSender = speakerSwitch.createEl("button", { cls: "solomon-chat-speaker is-right" }); rightSender.type = "button";
+    const composerContext = composer.createDiv({ cls: "solomon-chat-composer-context" });
+    const sender = composerContext.createEl("button", { cls: "solomon-chat-sender" }); sender.type = "button";
     const attachmentTray = composer.createDiv({ cls: "solomon-chat-attachment-tray", attr: { "aria-label": "Files ready to send" } });
     const composeRow = composer.createDiv({ cls: "solomon-chat-compose-row" });
-    const attach = composeRow.createEl("button", { cls: "solomon-chat-icon", attr: { "aria-label": "Attach files" } }); attach.type = "button"; setIcon(attach, "paperclip");
-    const textarea = composeRow.createEl("textarea", { attr: { rows: "1", enterkeyhint: "send", autocapitalize: "sentences", placeholder: "Message…", "aria-label": "Message" } });
+    const attach = composeRow.createEl("button", { cls: "solomon-chat-icon", attr: { "aria-label": "Add attachment" } }); attach.type = "button"; setIcon(attach, "plus");
+    const textarea = composeRow.createEl("textarea", { attr: { rows: "1", enterkeyhint: Platform.isMobile ? "enter" : "send", autocapitalize: "sentences", placeholder: "Message…", "aria-label": "Message" } });
     const send = composeRow.createEl("button", { cls: "solomon-chat-send", attr: { "aria-label": "Send message" } }); send.type = "button"; setIcon(send, "arrow-up");
     const component = new Component(); component.load();
     const restoredDraft = this.restoreDraft(file, conversation);
     const resizeObserver = new ResizeObserver(() => this.scheduleViewport());
     resizeObserver.observe(root);
-    const state: ViewState = { leaf, file, root, header, messages, jumpToLatest, composer, textarea, leftSender, rightSender, attachmentTray, attach, send, announcer, pendingAttachments: [], draft: restoredDraft, conversation, component, focused: false, sending: this.isFileBusy(file), blurTimer: 0, lastMessageCount: 0, renderSignature: "", scrollAfterNextAppend: false, visibleStart: initialVisibleStart(conversation.messages.length), initialScrollPending: true, renderGeneration: 0, resizeObserver };
+    const state: ViewState = { leaf, file, root, messages, jumpToLatest, composer, textarea, sender, attachmentTray, attach, send, announcer, pendingAttachments: [], draft: restoredDraft, conversation, component, focused: false, sending: this.isFileBusy(file), blurTimer: 0, lastMessageCount: 0, renderSignature: "", scrollAfterNextAppend: false, visibleStart: initialVisibleStart(conversation.messages.length), initialScrollPending: true, renderGeneration: 0, resizeObserver };
 
     textarea.addEventListener("input", () => { state.draft = textarea.value; this.rememberDraft(state); this.resizeTextarea(textarea); this.updateSendAvailability(state); });
     textarea.addEventListener("focus", () => { state.focused = true; this.applyViewport(state); });
@@ -209,14 +304,12 @@ export default class SolomonChatPlugin extends Plugin {
       state.blurTimer = window.setTimeout(() => { state.focused = state.textarea === document.activeElement; this.applyViewport(state); }, 140);
     });
     textarea.addEventListener("keydown", (event: KeyboardEvent) => {
-      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); void this.submit(state); }
+      if (shouldSubmitComposerKey({ composing: event.isComposing, key: event.key, mobile: Platform.isMobile, shift: event.shiftKey })) { event.preventDefault(); void this.submit(state); }
     });
     send.addEventListener("pointerdown", (event: PointerEvent) => event.preventDefault());
     send.addEventListener("click", () => void this.submit(state));
-    leftSender.addEventListener("pointerdown", (event: PointerEvent) => event.preventDefault());
-    leftSender.addEventListener("click", () => void this.switchSpeaker(state.file, "left"));
-    rightSender.addEventListener("pointerdown", (event: PointerEvent) => event.preventDefault());
-    rightSender.addEventListener("click", () => void this.switchSpeaker(state.file, "right"));
+    sender.addEventListener("pointerdown", (event: PointerEvent) => event.preventDefault());
+    sender.addEventListener("click", () => void this.switchSpeaker(state.file));
     attach.addEventListener("pointerdown", (event: PointerEvent) => event.preventDefault());
     attach.addEventListener("click", () => void this.attachFiles(state));
     jumpToLatest.addEventListener("click", () => { this.setLatestVisible(state, false); messages.scrollTop = messages.scrollHeight; });
@@ -255,7 +348,7 @@ export default class SolomonChatPlugin extends Plugin {
     const renderTasks: Promise<void>[] = [];
     leaf.view.containerEl.addClass("solomon-chat-active");
     this.applyColors(state.root);
-    this.renderHeader(state);
+    this.updateSpeakerControls(state);
     if (!canReuseTranscript) {
       this.setLatestVisible(state, false);
       state.component.unload(); state.component = new Component(); state.component.load();
@@ -362,46 +455,20 @@ export default class SolomonChatPlugin extends Plugin {
     state.jumpToLatest.setAttribute("aria-hidden", String(!visible));
   }
 
-  private renderHeader(state: ViewState): void {
-    state.header.empty();
-    const context = state.header.createDiv({ cls: "solomon-chat-context" });
-    const pair = context.createDiv({ cls: "solomon-chat-pair", attr: { "aria-hidden": "true" } });
-    this.renderAvatar(pair, state, "left");
-    this.renderAvatar(pair, state, "right");
-    const heading = context.createDiv({ cls: "solomon-chat-heading" });
-    heading.createDiv({ cls: "solomon-chat-title", text: state.file.basename });
-    heading.createDiv({ cls: "solomon-chat-participants", text: `${state.conversation.leftName} & ${state.conversation.rightName}` });
-    const actions = state.header.createDiv({ cls: "solomon-chat-actions" });
-    const more = this.iconButton(actions, "ellipsis", "Conversation actions", () => this.openActionsMenu(state, more));
-    this.updateSpeakerControls(state);
-  }
-
-  private renderAvatar(parent: HTMLElement, state: ViewState, side: Side): void {
-    const name = side === "left" ? state.conversation.leftName : state.conversation.rightName;
-    const avatar = side === "left" ? state.conversation.leftAvatar : state.conversation.rightAvatar;
-    const container = parent.createDiv({ cls: `solomon-chat-avatar is-${side}` });
-    const avatarFile = avatar ? this.app.vault.getAbstractFileByPath(avatar) : null;
-    if (avatarFile instanceof TFile) {
-      const resource = this.app.vault.getResourcePath(avatarFile);
-      container.createEl("img", { attr: { src: resource, alt: "" } });
-    } else container.createSpan({ cls: "solomon-chat-initial", text: name.slice(0, 1).toUpperCase() });
-  }
-
   private updateSpeakerControls(state: ViewState): void {
     const active = state.conversation.nextSide;
-    const controls: Array<[Side, HTMLButtonElement, string]> = [
-      ["left", state.leftSender, state.conversation.leftName],
-      ["right", state.rightSender, state.conversation.rightName],
-    ];
-    for (const [side, button, name] of controls) {
-      button.textContent = name;
-      button.disabled = state.sending;
-      button.ariaPressed = String(active === side);
-      button.setAttribute("aria-label", `${active === side ? "Writing" : "Write"} as ${name}`);
-    }
     const activeName = active === "left" ? state.conversation.leftName : state.conversation.rightName;
+    const otherName = active === "left" ? state.conversation.rightName : state.conversation.leftName;
+    state.sender.textContent = `Send as ${activeName}`;
+    state.sender.disabled = state.sending;
+    state.sender.setAttribute("aria-label", `Sending as ${activeName}. Activate to switch to ${otherName}.`);
     state.textarea.placeholder = "Message…";
     state.send.setAttribute("aria-label", `Send as ${activeName}`);
+  }
+
+  openConversationActions(leaf: WorkspaceLeaf, anchor: HTMLElement): void {
+    const state = this.states.get(leaf);
+    if (state) this.openActionsMenu(state, anchor);
   }
 
   private openActionsMenu(state: ViewState, anchor: HTMLElement): void {
@@ -411,7 +478,8 @@ export default class SolomonChatPlugin extends Plugin {
     menu.addItem((item) => item.setTitle("Edit raw Markdown").setIcon("file-pen-line").onClick(() => this.toggleRaw(state.leaf)));
     menu.addItem((item) => item.setTitle("Export transcript").setIcon("download").onClick(() => void this.exportTranscript(state.file)));
     const rect = anchor.getBoundingClientRect();
-    menu.showAtPosition({ x: Math.max(8, rect.right - 220), y: rect.bottom + 4 });
+    const rootRect = state.root.getBoundingClientRect();
+    menu.showAtPosition({ x: Math.max(rootRect.left + 8, Math.min(rect.right - 220, rootRect.right - 228)), y: Math.min(rect.bottom + 4, window.innerHeight - 56) });
   }
 
   private renderEmptyState(state: ViewState): void {
@@ -424,10 +492,18 @@ export default class SolomonChatPlugin extends Plugin {
 
   private renderMessage(state: ViewState, index: number, animate = false): Promise<void> {
     const message = state.conversation.messages[index];
-    const wrapper = state.messages.createDiv({ cls: `solomon-chat-message is-${message.side}${animate ? " is-entering" : ""}`, attr: { role: "article", "data-message-index": String(index) } });
+    const previous = state.conversation.messages[index - 1];
+    const next = state.conversation.messages[index + 1];
+    const groupedBefore = previous?.side === message.side;
+    const groupedAfter = next?.side === message.side;
+    if (groupedBefore) state.messages.querySelector<HTMLElement>(`.solomon-chat-message[data-message-index="${index - 1}"]`)?.addClass("is-grouped-after");
+    const wrapper = state.messages.createDiv({
+      cls: `solomon-chat-message is-${message.side}${groupedBefore ? " is-grouped-before" : ""}${groupedAfter ? " is-grouped-after" : ""}${animate ? " is-entering" : ""}`,
+      attr: { role: "article", "data-message-index": String(index), "data-message-id": message.id || "" },
+    });
     const name = message.side === "left" ? state.conversation.leftName : state.conversation.rightName;
     wrapper.setAttribute("aria-label", `Message from ${name}${message.timestamp ? ` at ${this.formatTimestamp(message.timestamp)}` : ""}`);
-    if (this.settings.showTimestamps) wrapper.createDiv({ cls: "solomon-chat-meta", text: message.timestamp ? `${name} · ${this.formatTimestamp(message.timestamp)}` : name });
+    if (this.settings.showTimestamps && !groupedBefore) wrapper.createDiv({ cls: "solomon-chat-meta", text: message.timestamp ? `${name} · ${this.formatTimestamp(message.timestamp)}` : name });
     const row = wrapper.createDiv({ cls: "solomon-chat-message-row" });
     const bubble = row.createDiv({ cls: "solomon-chat-bubble" });
     const rendered = MarkdownRenderer.render(this.app, message.content || " ", bubble, state.file.path, state.component).then(() => this.wireLinks(bubble, state.file.path));
@@ -442,7 +518,11 @@ export default class SolomonChatPlugin extends Plugin {
     const showAtButton = () => {
       const menu = new Menu(); populateMenu(menu);
       const rect = actionButton.getBoundingClientRect();
-      menu.showAtPosition({ x: message.side === "right" ? Math.max(8, rect.right - 200) : rect.left, y: rect.bottom + 2 });
+      const width = Math.min(220, Math.max(160, state.root.clientWidth - 16));
+      const rootRect = state.root.getBoundingClientRect();
+      const preferred = message.side === "right" ? rect.right - width : rect.left;
+      const x = Math.max(rootRect.left + 8, Math.min(preferred, rootRect.right - width - 8));
+      menu.showAtPosition({ x, y: Math.min(rect.bottom + 2, window.innerHeight - 56) });
     };
     const showMenu = (event: MouseEvent) => { event.preventDefault(); const menu = new Menu();
       populateMenu(menu);
@@ -543,7 +623,7 @@ export default class SolomonChatPlugin extends Plugin {
         state.draft = ""; state.textarea.value = "";
         state.pendingAttachments = state.pendingAttachments.filter((item) => !pending.some((sent) => sent.id === item.id));
         state.conversation.nextSide = side === "left" ? "right" : "left";
-        this.renderHeader(state); this.renderAttachmentTray(state); this.resizeTextarea(state.textarea); this.focusTextarea(state.textarea);
+        this.updateSpeakerControls(state); this.renderAttachmentTray(state); this.resizeTextarea(state.textarea); this.focusTextarea(state.textarea);
         state.announcer.textContent = `Message sent as ${senderName}${pending.length ? ` with ${pending.length} ${pending.length === 1 ? "file" : "files"}` : ""}.`;
       }
       if (draftCleanupFailed) new Notice("Message sent. Draft cleanup will be reconciled when this conversation is reopened.");
@@ -575,7 +655,7 @@ export default class SolomonChatPlugin extends Plugin {
     window.setTimeout(() => { const state = [...this.states.values()].find((item) => item.file.path === file.path); if (state) this.focusTextarea(state.textarea); }, 0);
   }
 
-  private openPromptMenu(state: ViewState, anchor: HTMLElement = state.header): void {
+  private openPromptMenu(state: ViewState, anchor: HTMLElement = state.sender): void {
     const menu = new Menu();
     for (const prompt of PERSPECTIVE_PROMPTS) menu.addItem((item) => item.setTitle(prompt).onClick(() => {
       state.textarea.value = state.textarea.value.trim() ? `${state.textarea.value.trimEnd()}\n\n${prompt}` : prompt;
@@ -639,7 +719,7 @@ export default class SolomonChatPlugin extends Plugin {
     const attachmentFolder = normalizePath(`${this.parentPath(path) ? `${this.parentPath(path)}/` : ""}${this.basename(path)}.attachments`);
     const yaml = ["---", `${FM.flag}: true`, `${FM.conversationId}: ${this.yaml(this.newId("conversation"))}`, `${FM.leftName}: ${this.yaml(left.trim() || this.settings.defaultLeftName)}`, `${FM.rightName}: ${this.yaml(right.trim() || this.settings.defaultRightName)}`, `${FM.nextSide}: right`, `${FM.attachmentFolder}: ${this.yaml(attachmentFolder)}`, "---", ""].join("\n");
     const file = await this.app.vault.create(path, yaml);
-    await this.app.workspace.getLeaf(false).openFile(file);
+    await this.openChatFile(file, this.app.workspace.getLeaf(false));
   }
 
   private async attachFiles(state: ViewState): Promise<void> {
@@ -713,8 +793,7 @@ export default class SolomonChatPlugin extends Plugin {
     state.composer.ariaBusy = String(sending);
     state.textarea.readOnly = sending;
     state.attach.disabled = sending;
-    state.leftSender.disabled = sending;
-    state.rightSender.disabled = sending;
+    state.sender.disabled = sending;
     setIcon(state.send, sending ? "loader-circle" : "arrow-up");
     state.send.toggleClass("is-sending", sending);
     state.send.setAttribute("aria-label", sending ? "Sending message" : `Send as ${state.conversation.nextSide === "left" ? state.conversation.leftName : state.conversation.rightName}`);
@@ -878,12 +957,12 @@ export default class SolomonChatPlugin extends Plugin {
     return next;
   }
 
-  private toggleRaw(leaf: WorkspaceLeaf): void {
-    const file = leaf.view instanceof MarkdownView ? leaf.view.file : null;
+  private async toggleRaw(leaf: WorkspaceLeaf): Promise<void> {
+    const file = this.fileForLeaf(leaf);
     if (!(file instanceof TFile)) return;
     if (this.isFileBusy(file)) { new Notice("Wait for the current send to finish before opening raw Markdown."); return; }
-    if (this.rawLeaves.get(leaf) === file.path) this.rawLeaves.delete(leaf); else this.rawLeaves.set(leaf, file.path);
-    void this.refreshLeaf(leaf);
+    if (leaf.view instanceof SolomonChatView) await this.openMarkdownFile(file, leaf);
+    else await this.openChatFile(file, leaf);
   }
 
   private async exportTranscript(file: TFile): Promise<void> {
@@ -909,40 +988,9 @@ export default class SolomonChatPlugin extends Plugin {
     if (!state.root.isConnected) return;
     const vv = window.visualViewport; const rect = state.root.getBoundingClientRect();
     const focused = state.focused || state.composer.contains(document.activeElement);
-    const topToolbarClearance = Platform.isMobile ? this.measureTopToolbar(state.root) : 0;
-    const closedToolbarClearance = Platform.isMobile ? this.measureBottomToolbar(state.root) : 0;
-    const layout = calculateViewportLayout({ mobile: Platform.isMobile, focused, layoutHeight: window.innerHeight, visualHeight: vv?.height || window.innerHeight, visualOffsetTop: vv?.offsetTop || 0, containerBottom: rect.bottom, closedToolbarClearance });
+    const layout = calculateViewportLayout({ mobile: Platform.isMobile, focused, layoutHeight: window.innerHeight, visualHeight: vv?.height || window.innerHeight, visualOffsetTop: vv?.offsetTop || 0, containerBottom: rect.bottom, closedToolbarClearance: 0 });
     state.root.classList.toggle("is-compose-mode", layout.composeMode); state.root.classList.toggle("is-keyboard-open", layout.keyboardOpen);
-    state.root.style.setProperty("--solomon-top-clearance", `${topToolbarClearance}px`);
-    state.root.style.setProperty("--solomon-bottom-clearance", `${layout.bottomClearance}px`);
-  }
-
-  private measureTopToolbar(root: HTMLElement): number {
-    const rect = root.getBoundingClientRect(); let bottom = rect.top;
-    const x = Math.min(window.innerWidth - 8, Math.max(8, rect.left + rect.width / 2));
-    for (const y of [8, 24, 40, 56, 72]) {
-      for (const element of document.elementsFromPoint(x, y)) {
-        if (!element.instanceOf(HTMLElement) || root.contains(element) || element.contains(root)) continue;
-        const style = getComputedStyle(element); if (style.position !== "fixed" && style.position !== "sticky") continue;
-        const candidate = element.getBoundingClientRect();
-        if (candidate.top <= rect.top + 96 && candidate.bottom > rect.top && candidate.bottom <= rect.top + 160) bottom = Math.max(bottom, candidate.bottom);
-      }
-    }
-    return Math.min(160, Math.max(0, Math.round(bottom - rect.top)));
-  }
-
-  private measureBottomToolbar(root: HTMLElement): number {
-    const rect = root.getBoundingClientRect(); let top = rect.bottom;
-    const x = Math.min(window.innerWidth - 8, Math.max(8, rect.left + rect.width / 2));
-    for (const offset of [12, 28, 44, 60, 76, 92]) {
-      for (const element of document.elementsFromPoint(x, Math.max(8, window.innerHeight - offset))) {
-        if (!element.instanceOf(HTMLElement) || root.contains(element) || element.contains(root)) continue;
-        const style = getComputedStyle(element); if (style.position !== "fixed" && style.position !== "sticky") continue;
-        const candidate = element.getBoundingClientRect();
-        if (candidate.bottom >= window.innerHeight - 96 && candidate.top >= window.innerHeight - 160 && candidate.top < rect.bottom) top = Math.min(top, candidate.top);
-      }
-    }
-    return Math.min(160, Math.max(0, Math.round(rect.bottom - top + (top < rect.bottom ? 6 : 0))));
+    state.root.setCssProps({ "--solomon-top-clearance": "0px", "--solomon-bottom-clearance": `${layout.bottomClearance}px` });
   }
 
   private applyColors(root: HTMLElement): void {
@@ -959,11 +1007,12 @@ export default class SolomonChatPlugin extends Plugin {
     const button = parent.createEl("button", { cls: "solomon-chat-icon", attr: { "aria-label": label, "data-tooltip-position": "bottom" } }); button.type = "button"; setIcon(button, icon); button.addEventListener("click", action); return button;
   }
 
-  private withActiveConversation(checking: boolean, action: (file: TFile) => void): boolean {
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView); const file = view?.file;
+  private withActiveConversation(checking: boolean, action: (file: TFile, leaf: WorkspaceLeaf) => void): boolean {
+    const leaf = this.app.workspace.getLeaf(false);
+    const file = this.fileForLeaf(leaf);
     if (!(file instanceof TFile)) return false;
     const fm = this.frontmatterFor(file);
-    if (!fm[FM.flag]) return false; if (!checking) action(file); return true;
+    if (!fm[FM.flag]) return false; if (!checking) action(file, leaf); return true;
   }
 
   private ensureFrontmatter(fm: Frontmatter, file: TFile, side: Side): void {
