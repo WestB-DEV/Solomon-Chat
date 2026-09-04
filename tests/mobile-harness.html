@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Solomon Chat mobile layout harness</title>
-  <link rel="stylesheet" href="../styles.css?v=6">
+  <link rel="stylesheet" href="../styles.css?v=7">
   <style>
     :root { --background-primary:#fff; --background-primary-alt:#f7f7f8; --background-secondary:#f0f0f2; --background-modifier-border:#e4e4e7; --background-modifier-hover:#ececef; --interactive-accent:#8b6cef; --text-normal:#1f2023; --text-muted:#6b6b70; --text-faint:#9a9aa0; --text-on-accent:#fff; --size-4-1:4px; --size-4-2:8px; --size-4-3:12px; --radius-l:12px; --radius-m:8px; --font-ui-smaller:12px; --font-ui-small:13px; }
     * { box-sizing:border-box; }
@@ -84,21 +84,8 @@
       </aside>
       <main class="phone">
       <div class="desktop-titlebar"><span>A hard decision.md</span><span>Reading view&nbsp;&nbsp;⋯</span></div>
-      <div class="view-content solomon-chat-active">
+      <div class="view-content solomon-chat-active solomon-chat-view-content">
         <section class="solomon-chat-root" aria-label="Solomon Chat test conversation">
-          <header class="solomon-chat-header">
-            <div class="solomon-chat-context">
-              <div class="solomon-chat-pair" aria-hidden="true">
-                <div class="solomon-chat-avatar is-left"><span class="solomon-chat-initial">S</span></div>
-                <div class="solomon-chat-avatar is-right"><span class="solomon-chat-initial">M</span></div>
-              </div>
-              <div class="solomon-chat-heading">
-                <div class="solomon-chat-title">A hard decision</div>
-                <div class="solomon-chat-participants">Solomon &amp; Me</div>
-              </div>
-            </div>
-            <div class="solomon-chat-actions"><button class="solomon-chat-icon" aria-label="Conversation actions"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
-          </header>
           <div class="solomon-chat-messages">
             <button class="solomon-chat-load-earlier" type="button">Show earlier messages (1,800)</button>
             <article class="solomon-chat-message is-right"><div class="solomon-chat-meta">Me · 9:12 AM</div><div class="solomon-chat-message-row"><div class="solomon-chat-bubble"><p>I keep going in circles about this decision.</p></div><div class="solomon-chat-message-actions"><button class="solomon-chat-message-action" aria-label="Actions for Me's message"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div></div></article>
@@ -109,10 +96,7 @@
           </div>
           <button class="solomon-chat-jump-latest" aria-label="Jump to latest message" aria-hidden="true" tabindex="-1"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m6 9 6 6 6-6"/></svg><span>Latest</span></button>
           <footer class="solomon-chat-composer">
-            <div class="solomon-chat-speaker-switch" role="group" aria-label="Choose who is speaking">
-              <button class="solomon-chat-speaker is-left" aria-pressed="false">Solomon</button>
-              <button class="solomon-chat-speaker is-right" aria-pressed="true">Me</button>
-            </div>
+            <div class="solomon-chat-composer-context"><button class="solomon-chat-sender" aria-label="Sending as Me. Activate to switch to Solomon.">Send as Me</button></div>
             <div class="solomon-chat-attachment-tray" aria-label="Files ready to send">
               <div class="solomon-chat-attachment">
                 <span class="solomon-chat-attachment-icon" aria-hidden="true"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><polyline points="14 2 14 8 20 8"/></svg></span>
@@ -121,7 +105,7 @@
               </div>
             </div>
             <div class="solomon-chat-compose-row">
-              <button class="solomon-chat-icon" aria-label="Attach files"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.6-8.6"/></svg></button>
+              <button class="solomon-chat-icon" aria-label="Add attachment"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
               <textarea rows="1" placeholder="Message…" aria-label="Message"></textarea>
               <button class="solomon-chat-send" aria-label="Send as Me"><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="m5 12 7-7 7 7M12 19V5"/></svg></button>
             </div>
@@ -142,6 +126,6 @@
       </main>
     </div>
   </div>
-  <script src="mobile-harness.js?v=6"></script>
+  <script src="mobile-harness.js?v=7"></script>
 </body>
 </html>
