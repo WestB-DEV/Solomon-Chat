@@ -4,6 +4,7 @@
   min-height: 0;
   overflow: hidden;
   padding: 0;
+  position: relative;
 }
 
 .solomon-chat-root {
@@ -27,13 +28,22 @@
   gap: 8px;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
+  inset: 0;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
   padding: max(calc(8px + var(--solomon-top-clearance)), calc(8px + var(--solomon-safe-area-top))) max(var(--solomon-gutter), var(--solomon-safe-area-right)) max(calc(8px + var(--solomon-bottom-clearance)), calc(8px + var(--solomon-safe-area-bottom))) max(var(--solomon-gutter), var(--solomon-safe-area-left));
-  position: relative;
+  position: absolute;
   width: 100%;
   -webkit-font-smoothing: antialiased;
+}
+
+.solomon-chat-bottom-inset-probe {
+  height: var(--mobile-toolbar-height, 0px);
+  pointer-events: none;
+  position: absolute;
+  visibility: hidden;
+  width: 0;
 }
 
 .solomon-chat-messages {

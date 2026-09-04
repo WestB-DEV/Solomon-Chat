@@ -24,6 +24,7 @@ interface ViewState {
   attach: HTMLButtonElement;
   send: HTMLButtonElement;
   announcer: HTMLElement;
+  bottomInsetProbe: HTMLElement;
   pendingAttachments: PendingAttachment[];
   draft: string;
   conversation: Conversation;
@@ -279,6 +280,7 @@ export default class SolomonChatPlugin extends Plugin {
     host.empty();
     const root = host.createDiv({ cls: "solomon-chat-root" });
     root.classList.toggle("is-mobile", Platform.isMobile);
+    const bottomInsetProbe = root.createDiv({ cls: "solomon-chat-bottom-inset-probe", attr: { "aria-hidden": "true" } });
     const messages = root.createDiv({ cls: "solomon-chat-messages", attr: { role: "log", "aria-label": "Conversation messages" } });
     const jumpToLatest = root.createEl("button", { cls: "solomon-chat-jump-latest", attr: { "aria-label": "Jump to latest message", "aria-hidden": "true" } });
     jumpToLatest.type = "button"; jumpToLatest.tabIndex = -1; setIcon(jumpToLatest, "arrow-down"); jumpToLatest.createSpan({ text: "Latest" });
@@ -295,7 +297,7 @@ export default class SolomonChatPlugin extends Plugin {
     const restoredDraft = this.restoreDraft(file, conversation);
     const resizeObserver = new ResizeObserver(() => this.scheduleViewport());
     resizeObserver.observe(root);
-    const state: ViewState = { leaf, file, root, messages, jumpToLatest, composer, textarea, sender, attachmentTray, attach, send, announcer, pendingAttachments: [], draft: restoredDraft, conversation, component, focused: false, sending: this.isFileBusy(file), blurTimer: 0, lastMessageCount: 0, renderSignature: "", scrollAfterNextAppend: false, visibleStart: initialVisibleStart(conversation.messages.length), initialScrollPending: true, renderGeneration: 0, resizeObserver };
+    const state: ViewState = { leaf, file, root, messages, jumpToLatest, composer, textarea, sender, attachmentTray, attach, send, announcer, bottomInsetProbe, pendingAttachments: [], draft: restoredDraft, conversation, component, focused: false, sending: this.isFileBusy(file), blurTimer: 0, lastMessageCount: 0, renderSignature: "", scrollAfterNextAppend: false, visibleStart: initialVisibleStart(conversation.messages.length), initialScrollPending: true, renderGeneration: 0, resizeObserver };
 
     textarea.addEventListener("input", () => { state.draft = textarea.value; this.rememberDraft(state); this.resizeTextarea(textarea); this.updateSendAvailability(state); });
     textarea.addEventListener("focus", () => { state.focused = true; this.applyViewport(state); });
@@ -988,7 +990,8 @@ export default class SolomonChatPlugin extends Plugin {
     if (!state.root.isConnected) return;
     const vv = window.visualViewport; const rect = state.root.getBoundingClientRect();
     const focused = state.focused || state.composer.contains(document.activeElement);
-    const layout = calculateViewportLayout({ mobile: Platform.isMobile, focused, layoutHeight: window.innerHeight, visualHeight: vv?.height || window.innerHeight, visualOffsetTop: vv?.offsetTop || 0, containerBottom: rect.bottom, closedToolbarClearance: 0 });
+    const closedToolbarClearance = Platform.isMobile ? Math.round(state.bottomInsetProbe.getBoundingClientRect().height) : 0;
+    const layout = calculateViewportLayout({ mobile: Platform.isMobile, focused, layoutHeight: window.innerHeight, visualHeight: vv?.height || window.innerHeight, visualOffsetTop: vv?.offsetTop || 0, containerBottom: rect.bottom, closedToolbarClearance });
     state.root.classList.toggle("is-compose-mode", layout.composeMode); state.root.classList.toggle("is-keyboard-open", layout.keyboardOpen);
     state.root.setCssProps({ "--solomon-top-clearance": "0px", "--solomon-bottom-clearance": `${layout.bottomClearance}px` });
   }

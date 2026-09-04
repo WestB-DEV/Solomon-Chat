@@ -17,12 +17,16 @@ These screenshots were captured on 2026-09-02 and 2026-09-03 from Solomon Chat r
 - [`android-action-spacing-pass.png`](android-action-spacing-pass.png) — the final native 48 px message action with a measured 8 px CSS gap from the selected bubble.
 - [`android-keyboard-spacing-before.png`](android-keyboard-spacing-before.png) — diagnostic evidence of the Android host-resize bug: the composer remained safe but an 86 px duplicate toolbar gap wasted vertical space above Gboard.
 - [`android-keyboard-resizeobserver-pass.png`](android-keyboard-resizeobserver-pass.png) — the corrected native Gboard state with zero duplicate toolbar clearance and a 6 px composer-to-keyboard gap.
+- [`android-native-view-keyboard-pass.png`](android-native-view-keyboard-pass.png) — the registered native chat view filling Obsidian's keyboard-resized content area, with the composer directly above Gboard and no overlap.
+- [`android-native-view-dark-landscape.png`](android-native-view-dark-landscape.png) — the registered native view in Android landscape and dark mode with the compact composer and system navigation both visible.
 
 The destructive confirmation was never activated. The emulator's system appearance was restored after dark-mode capture.
 
 ## Windows production evidence
 
 On 2026-09-03, Solomon Chat was tested inside native Obsidian 1.13.6 for Windows in an isolated 1024 x 800 vault window. The conversation header, empty state, transcript, speaker selector, pending-attachment chip, attachment bubble, and composer all remained contained with comfortable edge clearance and no visible horizontal clipping. The pass created a conversation, sent one message from each side, selected and sent a real file through the Windows file picker, opened raw Markdown, and verified that the copied attachment's SHA-256 matched its source.
+
+The follow-up registered-view pass used Obsidian 1.13.7 at the same 1024 x 800 size. It measured zero root overflow, 40 px action targets, an exact-once native send, raw Markdown/chat round trips, two simultaneous chat leaves, and a successful plugin disable/re-enable cycle in the isolated vault. [`windows-native-view-light.png`](windows-native-view-light.png) is the resulting native-shell capture.
 
 ## Desktop and iPhone-size harness evidence
 

@@ -24,6 +24,23 @@ Covered cases include:
 - Android shells that resize the layout viewport directly
 - Desktop isolation from mobile keyboard logic
 
+## 2026-09-03 native-view acceptance pass
+
+Solomon conversations now open in a registered `TextFileView` instead of replacing Obsidian's Markdown editor DOM. The same Markdown file remains the source of truth, and `Edit raw Markdown` returns the active leaf to Obsidian's standard source view. A separate `Open in chat view` command restores the conversation UI.
+
+The rebuilt plugin was installed in native Obsidian on Android 15 and Windows 11. Acceptance covered:
+
+- Android portrait and landscape in light and dark themes, including five keyboard open/close cycles
+- Gboard host-resized layout with the composer ending exactly at the resized Obsidian content boundary, zero duplicate toolbar inset, and no horizontal overflow
+- Android accessibility-tree names for message groups, sender switching, attachments, the composer, Send, and message actions
+- Native message sends persisted exactly once under the selected speaker, plus raw Markdown/chat round trips
+- Windows Obsidian 1.13.7 at 1024 x 800 with zero root overflow, 40 px desktop action targets, exact-once sending, raw/chat round trips, and two simultaneous chat leaves for the same file
+- Plugin disable/re-enable in the isolated Windows vault; disabling leaves the Markdown file and attachments untouched
+
+Automated coverage now contains 42 passing tests, including five routing and desktop/mobile keyboard-submit regressions. TypeScript, the production bundle, harness bundle, ESLint (zero errors; one documented legacy settings warning), and `git diff --check` all pass.
+
+The tested desktop staging copy and Android installation matched the final local artifacts byte-for-byte: `main.js` SHA-256 `024fae2e5ec51730aec3c85b4f8856f107d4f82d1a95db67d646ba8e8df3553d` and `styles.css` SHA-256 `29b4f838d4f88a7c6635adcf770bc50ed9eb6119daca828cc7a5e642a54afdb4`.
+
 ## Local visual mobile harness
 
 Build and serve the harness:
