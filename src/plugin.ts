@@ -304,7 +304,12 @@ export default class SolomonChatPlugin extends Plugin {
     resizeObserver.observe(messages);
     const state: ViewState = { leaf, file, root, messages, jumpToLatest, composer, textarea, sender, attachmentTray, attach, send, announcer, bottomInsetProbe, pendingAttachments: [], draft: restoredDraft, conversation, component, focused: false, sending: this.isFileBusy(file), blurTimer: 0, lastMessageCount: 0, renderSignature: "", scrollAfterNextAppend: false, visibleStart: initialVisibleStart(conversation.messages.length), initialScrollPending: true, followingLatest: true, renderGeneration: 0, resizeObserver };
 
-    textarea.addEventListener("input", () => { state.draft = textarea.value; this.rememberDraft(state); this.resizeTextarea(textarea); this.updateSendAvailability(state); });
+    // readOnly can dismiss mobile keyboards. Guard edits without changing focus eligibility.
+    textarea.addEventListener("beforeinput", (event) => { if (state.sending) event.preventDefault(); });
+    textarea.addEventListener("input", () => {
+      if (state.sending) { textarea.value = state.draft; return; }
+      state.draft = textarea.value; this.rememberDraft(state); this.resizeTextarea(textarea); this.updateSendAvailability(state);
+    });
     textarea.addEventListener("focus", () => { state.focused = true; this.applyViewport(state); });
     textarea.addEventListener("blur", () => {
       window.clearTimeout(state.blurTimer);
@@ -332,7 +337,6 @@ export default class SolomonChatPlugin extends Plugin {
     let state = this.states.get(leaf);
     const firstRender = !state;
     const oldPath = state?.file.path;
-    const preserveFocus = state?.textarea === document.activeElement;
     const oldCount = state?.lastMessageCount || 0;
     const previousConversation = state?.conversation;
     const previousScrollTop = state?.messages.scrollTop || 0;
@@ -392,7 +396,7 @@ export default class SolomonChatPlugin extends Plugin {
         if (!this.restoreScrollAnchor(renderedState, previousAnchor)) renderedState.messages.scrollTop = Math.min(previousScrollTop, Math.max(0, renderedState.messages.scrollHeight - renderedState.messages.clientHeight));
       }
       renderedState.scrollAfterNextAppend = false;
-      if (this.settings.autoFocusComposer && (firstRender && !Platform.isMobile || preserveFocus)) this.focusTextarea(renderedState.textarea);
+      if (this.settings.autoFocusComposer && firstRender && !Platform.isMobile && renderedState.root.isConnected && document.activeElement === document.body) this.focusTextarea(renderedState.textarea);
     }, 0)).catch((error) => console.error("Solomon Chat: message rendering failed", error));
   }
 
@@ -578,6 +582,7 @@ export default class SolomonChatPlugin extends Plugin {
     const attachmentOperationFolder = pending.length ? this.attachmentOperationFolder(attachmentFolder, messageId) : "";
     const timestamp = currentTimestamp();
     const draftKeyBeforeSend = draftKey(conversationIdBeforeSend, filePath);
+    state.draft = draft;
     this.inFlightFiles.add(file); this.refreshFileSendingState(file);
     state.scrollAfterNextAppend = true;
     let committed = false;
@@ -639,7 +644,7 @@ export default class SolomonChatPlugin extends Plugin {
         state.draft = ""; state.textarea.value = "";
         state.pendingAttachments = state.pendingAttachments.filter((item) => !pending.some((sent) => sent.id === item.id));
         state.conversation.nextSide = side === "left" ? "right" : "left";
-        this.updateSpeakerControls(state); this.renderAttachmentTray(state); this.resizeTextarea(state.textarea); this.focusTextarea(state.textarea);
+        this.updateSpeakerControls(state); this.renderAttachmentTray(state); this.resizeTextarea(state.textarea);
         state.announcer.textContent = `Message sent as ${senderName}${pending.length ? ` with ${pending.length} ${pending.length === 1 ? "file" : "files"}` : ""}.`;
       }
       if (draftCleanupFailed) new Notice("Message sent. Draft cleanup will be reconciled when this conversation is reopened.");
@@ -807,7 +812,6 @@ export default class SolomonChatPlugin extends Plugin {
 
   private setSendingState(state: ViewState, sending: boolean): void {
     state.composer.ariaBusy = String(sending);
-    state.textarea.readOnly = sending;
     state.attach.disabled = sending;
     state.sender.disabled = sending;
     setIcon(state.send, sending ? "loader-circle" : "arrow-up");

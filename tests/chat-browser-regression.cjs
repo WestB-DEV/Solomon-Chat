@@ -62,6 +62,20 @@ const repo = path.resolve(__dirname, '..');
       assert.ok(containment);assert.deepEqual(errors,[]);
       await page.evaluate(async()=>{const m=document.querySelector('.solomon-chat-messages');m.scrollTop=100;await settle();plugin.states.get(leaf).scrollAfterNextAppend=true;append();await settle();});
       assert.ok(await bottom()<2,'own send returns to latest while reading history');
+      const composer=await page.evaluate(async()=>{
+        const state=plugin.states.get(leaf), textarea=state.textarea;
+        textarea.focus();textarea.value='Message being sent';textarea.dispatchEvent(new Event('input'));
+        plugin.inFlightFiles.add(file);plugin.refreshFileSendingState(file);
+        const input=new InputEvent('beforeinput',{inputType:'insertText',data:'x',cancelable:true,bubbles:true});
+        textarea.dispatchEvent(input);
+        const result={readOnly:textarea.readOnly,focused:document.activeElement===textarea,guarded:input.defaultPrevented,sendDisabled:state.send.disabled};
+        plugin.finishFileSend(file);await settle();
+        result.sameField=document.querySelector('textarea')===textarea;
+        result.draft=textarea.value;return result;
+      });
+      assert.equal(composer.readOnly,false,'sending must not toggle mobile keyboard eligibility');
+      assert.equal(composer.focused,true);assert.equal(composer.guarded,true);
+      assert.equal(composer.sendDisabled,true);assert.equal(composer.sameField,true);assert.equal(composer.draft,'Message being sent');
       console.log(JSON.stringify({width,height,mobile,firstMessage:true,append:true,keyboardResize:true,lateContent:true,history:true,latest:true,containment:true}));
       await page.close();
     }
