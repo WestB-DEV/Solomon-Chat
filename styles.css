@@ -8,6 +8,10 @@
 }
 
 .solomon-chat-root {
+  background-color: var(--solomon-chat-background, var(--background-primary));
+  background-image: var(--solomon-chat-wallpaper, none);
+  background-position: center;
+  background-size: cover;
   --solomon-left-bubble: color-mix(in srgb, var(--background-modifier-hover) 82%, var(--background-primary) 18%);
   --solomon-right-bubble: color-mix(in srgb, var(--interactive-accent) 34%, var(--background-primary) 66%);
   --solomon-left-text: var(--text-normal);
@@ -142,6 +146,12 @@
 .solomon-chat-message.is-right { align-items: flex-end; }
 .solomon-chat-message.is-grouped-before { margin-top: -6px; }
 .solomon-chat-meta { color: var(--text-muted); font-size: var(--font-ui-smaller); line-height: 1.35; padding: 2px 8px; }
+.solomon-chat-root.has-custom-background .solomon-chat-meta,
+.solomon-chat-root.has-custom-background .solomon-chat-empty,
+.solomon-chat-root.has-custom-background .solomon-chat-load-earlier {
+  background: var(--background-primary);
+  border-radius: 12px;
+}
 .solomon-chat-message-row { max-width: min(72%, 42rem); position: relative; }
 
 .solomon-chat-bubble {
@@ -158,6 +168,10 @@
 }
 .solomon-chat-message.is-left .solomon-chat-bubble { background: var(--solomon-left-bubble); color: var(--solomon-left-text); }
 .solomon-chat-message.is-right .solomon-chat-bubble { background: var(--solomon-right-bubble); color: var(--solomon-right-text); }
+.solomon-chat-root.has-custom-background .solomon-chat-bubble,
+.solomon-chat-root.has-custom-background .solomon-chat-message-action { background-color: var(--background-primary); }
+.solomon-chat-root.has-custom-background .solomon-chat-message.is-left .solomon-chat-bubble { background-image: linear-gradient(var(--solomon-left-bubble), var(--solomon-left-bubble)); }
+.solomon-chat-root.has-custom-background .solomon-chat-message.is-right .solomon-chat-bubble { background-image: linear-gradient(var(--solomon-right-bubble), var(--solomon-right-bubble)); }
 .solomon-chat-message.is-left:not(.is-grouped-after) .solomon-chat-bubble { border-bottom-left-radius: 6px; }
 .solomon-chat-message.is-right:not(.is-grouped-after) .solomon-chat-bubble { border-bottom-right-radius: 6px; }
 .solomon-chat-message.is-left.is-grouped-before .solomon-chat-bubble { border-top-left-radius: 8px; }

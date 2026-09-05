@@ -2,6 +2,7 @@ import {
   Component, MarkdownRenderer, MarkdownView, Menu, Notice, Plugin, Platform, TFile, TFolder, TextFileView, WorkspaceLeaf, normalizePath, setIcon,
 } from "obsidian";
 import { attachmentMarkdown, attachmentValidationError, formatAttachmentSize, isImageAttachment } from "./attachments";
+import { chatBackgroundColor, chatBackgroundImage } from "./background";
 import { DEFAULT_SETTINGS, FM, PERSPECTIVE_PROMPTS, type Side, type SolomonSettings } from "./constants";
 import { draftKey, movePathDraft, movePathPendingCleanups, parseDraftMap, parsePendingCleanupMap, type DraftMap, type PendingCleanupMap } from "./drafts";
 import { earlierMessageCount, initialVisibleStart, previousVisibleStart } from "./history";
@@ -124,6 +125,12 @@ export default class SolomonChatPlugin extends Plugin {
     this.addRibbonIcon("messages-square", "Create a conversation", () => this.openCreateModal());
     this.addCommand({ id: "create-conversation", name: "Create new conversation", callback: () => this.openCreateModal() });
     this.addCommand({ id: "edit-participants", name: "Edit conversation participants", checkCallback: (checking) => this.withActiveConversation(checking, (file) => this.openParticipantsModal(file)) });
+    this.addCommand({ id: "chat-background", name: "Change chat background", checkCallback: (checking) => {
+      const state = this.states.get(this.app.workspace.getLeaf(false));
+      if (!state) return false;
+      if (!checking) this.openBackgroundModal(state);
+      return true;
+    } });
     this.addCommand({ id: "switch-speaker", name: "Switch active speaker", checkCallback: (checking) => this.withActiveConversation(checking, (file) => void this.switchSpeaker(file)) });
     this.addCommand({ id: "toggle-raw-markdown", name: "Toggle chat and raw Markdown", checkCallback: (checking) => this.withActiveConversation(checking, (_file, leaf) => {
       if (!checking) void this.toggleRaw(leaf);
@@ -362,6 +369,7 @@ export default class SolomonChatPlugin extends Plugin {
     const renderTasks: Promise<void>[] = [];
     leaf.view.containerEl.addClass("solomon-chat-active");
     this.applyColors(state.root);
+    this.applyBackground(state);
     this.updateSpeakerControls(state);
     if (!canReuseTranscript) {
       this.setLatestVisible(state, false);
@@ -494,6 +502,7 @@ export default class SolomonChatPlugin extends Plugin {
     const menu = new Menu();
     if (this.settings.showPerspectivePrompts) menu.addItem((item) => item.setTitle("Use a perspective prompt…").setIcon("sparkles").onClick(() => this.openPromptMenu(state, anchor)));
     menu.addItem((item) => item.setTitle("Edit participants").setIcon("users").onClick(() => this.openParticipantsModal(state.file)));
+    menu.addItem((item) => item.setTitle("Chat background…").setIcon("image").onClick(() => this.openBackgroundModal(state)));
     menu.addItem((item) => item.setTitle("Edit raw Markdown").setIcon("file-pen-line").onClick(() => this.toggleRaw(state.leaf)));
     menu.addItem((item) => item.setTitle("Export transcript").setIcon("download").onClick(() => void this.exportTranscript(state.file)));
     const rect = anchor.getBoundingClientRect();
@@ -708,6 +717,26 @@ export default class SolomonChatPlugin extends Plugin {
         edit[FM.leftName] = values.left.trim() || this.settings.defaultLeftName; edit[FM.rightName] = values.right.trim() || this.settings.defaultRightName;
         this.setOrDelete(edit, FM.leftBio, values.leftBio); this.setOrDelete(edit, FM.rightBio, values.rightBio); this.setOrDelete(edit, FM.leftAvatar, values.leftAvatar); this.setOrDelete(edit, FM.rightAvatar, values.rightAvatar);
       }));
+    } }).open();
+  }
+
+  private openBackgroundModal(state: ViewState): void {
+    const file = state.file;
+    new FormModal(this.app, { title: "Chat background", initial: {
+      color: state.conversation.backgroundColor, image: state.conversation.backgroundImage,
+    }, fields: [
+      { key: "color", name: "Background color", type: "color", description: "Choose a color, or use the reset button for the theme default." },
+      { key: "image", name: "Wallpaper image", placeholder: "Wallpapers/quiet-sky.jpg", description: "Optional image path from your vault root. Clear to remove. PNG, JPEG, WebP, GIF, or AVIF. No remote images." },
+    ], onSubmit: async (values) => {
+      const color = chatBackgroundColor(values.color), image = chatBackgroundImage(values.image);
+      if (values.color.trim() && !color) throw new Error("Choose a valid background color.");
+      if (values.image.trim() && (!image || !(this.app.vault.getAbstractFileByPath(image) instanceof TFile))) throw new Error("Choose an existing supported image inside your vault, using its vault-relative path.");
+      await this.queue(file.path, async () => this.app.fileManager.processFrontMatter(file, (fm: Frontmatter) => {
+        this.setOrDelete(fm, FM.backgroundColor, color); this.setOrDelete(fm, FM.backgroundImage, image);
+      }));
+      for (const current of this.states.values()) if (current.file === file) {
+        current.conversation.backgroundColor = color; current.conversation.backgroundImage = image; this.applyBackground(current);
+      }
     } }).open();
   }
 
@@ -1018,6 +1047,16 @@ export default class SolomonChatPlugin extends Plugin {
     const keys = ["--solomon-left-bubble", "--solomon-right-bubble", "--solomon-left-text", "--solomon-right-text"];
     if (this.settings.useThemeColors) keys.forEach((key) => root.style.removeProperty(key));
     else { root.style.setProperty(keys[0], this.settings.leftBubbleColor); root.style.setProperty(keys[1], this.settings.rightBubbleColor); root.style.setProperty(keys[2], this.settings.leftTextColor); root.style.setProperty(keys[3], this.settings.rightTextColor); }
+  }
+
+  private applyBackground(state: ViewState): void {
+    const color = chatBackgroundColor(state.conversation.backgroundColor);
+    const path = chatBackgroundImage(state.conversation.backgroundImage);
+    const image = path ? this.app.vault.getAbstractFileByPath(path) : null;
+    const resource = image instanceof TFile ? this.app.vault.getResourcePath(image) : "";
+    state.root.style.setProperty("--solomon-chat-background", color || "var(--background-primary)");
+    state.root.style.setProperty("--solomon-chat-wallpaper", resource ? `url(${JSON.stringify(resource)})` : "none");
+    state.root.toggleClass("has-custom-background", !!(color || resource));
   }
 
   private wireLinks(container: HTMLElement, source: string): void {

@@ -1,5 +1,6 @@
 import type { Side } from "./constants";
 import { FM } from "./constants";
+import { chatBackgroundColor, chatBackgroundImage } from "./background";
 
 export interface ChatMessage {
   id: string;
@@ -37,6 +38,8 @@ export interface Conversation {
   rightBio: string;
   leftAvatar: string;
   rightAvatar: string;
+  backgroundColor: string;
+  backgroundImage: string;
   preamble: string;
   messages: ChatMessage[];
 }
@@ -88,6 +91,8 @@ export function parseConversation(
     rightBio: clean(meta[FM.rightBio]),
     leftAvatar: clean(meta[FM.leftAvatar]),
     rightAvatar: clean(meta[FM.rightAvatar]),
+    backgroundColor: chatBackgroundColor(meta[FM.backgroundColor]),
+    backgroundImage: chatBackgroundImage(meta[FM.backgroundImage]),
     preamble: "",
     messages: [],
   };

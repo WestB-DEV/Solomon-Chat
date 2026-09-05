@@ -51,6 +51,14 @@ Solomon Chat does not try to give you answers. It gives you a simple structure f
 
 You can give either character a name, bio, and vault image. You can also attach pictures and files to the conversation just as you would in a normal message thread.
 
+### Customize a chat background
+
+Open the conversation's **⋯** menu and choose **Chat background…**, or run **Solomon Chat: Change chat background** while in chat view. Pick a color and/or enter the vault-relative path of a wallpaper, such as `Wallpapers/quiet-sky.jpg`, then Save. Use the color reset button and clear the wallpaper field to return to the Obsidian theme.
+
+PNG, JPEG, WebP, GIF, and AVIF wallpapers are supported. Add the image to your vault first; images are not downloaded from remote URLs. Sync the image along with the conversation to use it on another device. Missing or renamed images fall back to the selected color or theme. Background preferences are stored in the conversation's `chat-background-color` and `chat-background-image` frontmatter; other chats are unaffected.
+
+The composer stays mounted through sending. Text edits, attachments, and duplicate sends are briefly guarded while the current message is saved; the plugin does not deliberately dismiss and reopen the keyboard or steal focus on completion.
+
 ## Your notes are yours, forever
 
 Obsidian is built around a durable idea: your notes should remain yours even if the software around them disappears. Solomon Chat follows the same rule.

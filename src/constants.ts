@@ -9,6 +9,8 @@ export const FM = {
   rightBio: "right-bio",
   leftAvatar: "left-avatar",
   rightAvatar: "right-avatar",
+  backgroundColor: "chat-background-color",
+  backgroundImage: "chat-background-image",
 } as const;
 
 export type Side = "left" | "right";

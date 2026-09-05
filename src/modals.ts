@@ -5,7 +5,7 @@ export interface FieldSpec {
   name: string;
   description?: string;
   placeholder?: string;
-  type?: "text" | "textarea";
+  type?: "text" | "textarea" | "color";
 }
 
 export class FormModal extends Modal {
@@ -28,7 +28,18 @@ export class FormModal extends Modal {
     let firstInput: HTMLInputElement | HTMLTextAreaElement | null = null;
     for (const field of this.options.fields) {
       const setting = new Setting(this.contentEl).setName(field.name).setDesc(field.description || "");
-      if (field.type === "textarea") {
+      if (field.type === "color") {
+        setting.addColorPicker((component) => {
+          const updateDescription = () => setting.setDesc(values[field.key] ? `Custom color: ${values[field.key]}. Reset to use the theme.` : "Using the Obsidian theme. Choose a color to customize.");
+          updateDescription();
+          component.setValue(values[field.key] || "#e7e7ef").onChange((value) => { values[field.key] = value; updateDescription(); });
+          setting.addExtraButton((button) => button.setIcon("reset").setTooltip("Use theme background").onClick(() => {
+            values[field.key] = "";
+            component.setValue("#e7e7ef");
+            updateDescription();
+          }));
+        });
+      } else if (field.type === "textarea") {
         setting.addTextArea((component) => {
           component.setValue(values[field.key] || "").setPlaceholder(field.placeholder || "").onChange((value) => values[field.key] = value);
           component.inputEl.rows = 4;
