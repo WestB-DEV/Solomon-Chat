@@ -363,6 +363,10 @@ export default class SolomonChatPlugin extends Plugin {
       && previousConversation.messages.every((message, index) => this.sameMessage(message, conversation.messages[index]));
     const appended = canReuseTranscript && conversation.messages.length > oldCount;
     if (state.initialScrollPending || appended && state.scrollAfterNextAppend) state.followingLatest = true;
+    if (appended) {
+      state.scrollAfterNextAppend = false;
+      this.setLatestVisible(state, !state.followingLatest);
+    }
     state.file = file; state.conversation = conversation; state.renderSignature = renderSignature;
     state.sending = this.isFileBusy(file);
     const renderGeneration = ++state.renderGeneration;
@@ -403,7 +407,6 @@ export default class SolomonChatPlugin extends Plugin {
       } else if (!canReuseTranscript && !firstRender) {
         if (!this.restoreScrollAnchor(renderedState, previousAnchor)) renderedState.messages.scrollTop = Math.min(previousScrollTop, Math.max(0, renderedState.messages.scrollHeight - renderedState.messages.clientHeight));
       }
-      renderedState.scrollAfterNextAppend = false;
       if (this.settings.autoFocusComposer && firstRender && !Platform.isMobile && renderedState.root.isConnected && document.activeElement === document.body) this.focusTextarea(renderedState.textarea);
     }, 0)).catch((error) => console.error("Solomon Chat: message rendering failed", error));
   }

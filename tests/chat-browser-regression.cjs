@@ -59,7 +59,7 @@ const repo = path.resolve(__dirname, '..');
       assert.ok(await bottom()<2,'keyboard-size change follows latest');
       await page.evaluate(async()=>{document.querySelector('.solomon-chat-message:last-child p').style.height='240px';await settle();});
       assert.ok(await bottom()<2,'late content resize follows latest');
-      await page.evaluate(async()=>{document.querySelector('.solomon-chat-messages').scrollTop=100;await settle();append();await settle();});
+      await page.evaluate(async()=>{document.querySelector('.solomon-chat-messages').scrollTop=100;await settle();append();draw();await settle();});
       const history=await page.evaluate(()=>({top:document.querySelector('.solomon-chat-messages').scrollTop,latest:document.querySelector('.solomon-chat-jump-latest').getAttribute('aria-hidden')}));
       assert.ok(Math.abs(history.top-100)<2,'history position preserved');assert.equal(history.latest,'false');
       await page.getByRole('button',{name:'Jump to latest message',exact:true}).click();
@@ -68,6 +68,15 @@ const repo = path.resolve(__dirname, '..');
       assert.ok(containment);assert.deepEqual(errors,[]);
       await page.evaluate(async()=>{const m=document.querySelector('.solomon-chat-messages');m.scrollTop=100;await settle();plugin.states.get(leaf).scrollAfterNextAppend=true;append();await settle();});
       assert.ok(await bottom()<2,'own send returns to latest while reading history');
+      await page.evaluate(async()=>{
+        const state=plugin.states.get(leaf);
+        state.messages.scrollTop=100;await settle();
+        state.scrollAfterNextAppend=true;
+        // Obsidian can refresh unchanged data while an own-send write is pending.
+        draw();await settle();
+        append();await settle();
+      });
+      assert.ok(await bottom()<2,'unchanged refresh before own append preserves latest-message intent');
       const composer=await page.evaluate(async()=>{
         const state=plugin.states.get(leaf), textarea=state.textarea;
         textarea.focus();textarea.value='Message being sent';textarea.dispatchEvent(new Event('input'));
