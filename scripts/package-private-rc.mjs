@@ -32,4 +32,4 @@ writeFileSync(path.join(destination, 'candidate.json'), JSON.stringify({
   version: manifest.version, channel: 'private-rc1', commit, branch: git('branch', '--show-current'),
   createdAt: new Date().toISOString(), publicRelease: false, files,
 }, null, 2) + '\n');
-console.log(destination);
+process.stdout.write(destination + '\n');

@@ -27,6 +27,15 @@ export default defineConfig(
   },
   ...obsidianmd.configs.recommended,
   {
+    files: ["scripts/package-private-rc.mjs"],
+    languageOptions: {
+      globals: { ...globals.node },
+      parserOptions: { projectService: false },
+    },
+    // Release tooling runs in Node, never in the desktop/mobile plugin bundle.
+    rules: { "obsidianmd/no-nodejs-modules": "off" },
+  },
+  {
     files: ["tests/chat-browser-regression.cjs"],
     languageOptions: {
       globals: { ...globals.node, ...globals.browser, plugin: "readonly", leaf: "readonly", file: "readonly", chat: "readonly", draw: "readonly", append: "readonly", settle: "readonly" },
