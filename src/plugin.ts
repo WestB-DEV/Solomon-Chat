@@ -37,6 +37,7 @@ interface ViewState {
   scrollAfterNextAppend: boolean;
   visibleStart: number;
   initialScrollPending: boolean;
+  followingLatest: boolean;
   renderGeneration: number;
   resizeObserver: ResizeObserver;
 }
@@ -295,9 +296,13 @@ export default class SolomonChatPlugin extends Plugin {
     const send = composeRow.createEl("button", { cls: "solomon-chat-send", attr: { "aria-label": "Send message" } }); send.type = "button"; setIcon(send, "arrow-up");
     const component = new Component(); component.load();
     const restoredDraft = this.restoreDraft(file, conversation);
-    const resizeObserver = new ResizeObserver(() => this.scheduleViewport());
+    const resizeObserver = new ResizeObserver(() => {
+      this.scheduleViewport();
+      if (state.followingLatest && root.isConnected) messages.scrollTop = messages.scrollHeight;
+    });
     resizeObserver.observe(root);
-    const state: ViewState = { leaf, file, root, messages, jumpToLatest, composer, textarea, sender, attachmentTray, attach, send, announcer, bottomInsetProbe, pendingAttachments: [], draft: restoredDraft, conversation, component, focused: false, sending: this.isFileBusy(file), blurTimer: 0, lastMessageCount: 0, renderSignature: "", scrollAfterNextAppend: false, visibleStart: initialVisibleStart(conversation.messages.length), initialScrollPending: true, renderGeneration: 0, resizeObserver };
+    resizeObserver.observe(messages);
+    const state: ViewState = { leaf, file, root, messages, jumpToLatest, composer, textarea, sender, attachmentTray, attach, send, announcer, bottomInsetProbe, pendingAttachments: [], draft: restoredDraft, conversation, component, focused: false, sending: this.isFileBusy(file), blurTimer: 0, lastMessageCount: 0, renderSignature: "", scrollAfterNextAppend: false, visibleStart: initialVisibleStart(conversation.messages.length), initialScrollPending: true, followingLatest: true, renderGeneration: 0, resizeObserver };
 
     textarea.addEventListener("input", () => { state.draft = textarea.value; this.rememberDraft(state); this.resizeTextarea(textarea); this.updateSendAvailability(state); });
     textarea.addEventListener("focus", () => { state.focused = true; this.applyViewport(state); });
@@ -314,8 +319,11 @@ export default class SolomonChatPlugin extends Plugin {
     sender.addEventListener("click", () => void this.switchSpeaker(state.file));
     attach.addEventListener("pointerdown", (event: PointerEvent) => event.preventDefault());
     attach.addEventListener("click", () => void this.attachFiles(state));
-    jumpToLatest.addEventListener("click", () => { this.setLatestVisible(state, false); messages.scrollTop = messages.scrollHeight; });
-    messages.addEventListener("scroll", () => { if (this.isNearBottom(messages)) this.setLatestVisible(state, false); }, { passive: true });
+    jumpToLatest.addEventListener("click", () => { state.followingLatest = true; this.setLatestVisible(state, false); messages.scrollTop = messages.scrollHeight; });
+    messages.addEventListener("scroll", () => {
+      state.followingLatest = this.isNearBottom(messages);
+      if (state.followingLatest) this.setLatestVisible(state, false);
+    }, { passive: true });
     if (restoredDraft) window.setTimeout(() => { new Notice("Draft restored"); announcer.textContent = "Draft restored."; }, 0);
     return state;
   }
@@ -329,7 +337,6 @@ export default class SolomonChatPlugin extends Plugin {
     const previousConversation = state?.conversation;
     const previousScrollTop = state?.messages.scrollTop || 0;
     const previousAnchor = state ? this.captureScrollAnchor(state) : null;
-    const nearBottom = !state || this.isNearBottom(state.messages);
     if (!state) { state = this.createState(leaf, file, conversation); this.states.set(leaf, state); }
     if (oldPath && oldPath !== file.path) {
       state.draft = this.restoreDraft(file, conversation);
@@ -344,6 +351,7 @@ export default class SolomonChatPlugin extends Plugin {
       && oldCount <= conversation.messages.length
       && previousConversation.messages.every((message, index) => this.sameMessage(message, conversation.messages[index]));
     const appended = canReuseTranscript && conversation.messages.length > oldCount;
+    if (state.initialScrollPending || appended && state.scrollAfterNextAppend) state.followingLatest = true;
     state.file = file; state.conversation = conversation; state.renderSignature = renderSignature;
     state.sending = this.isFileBusy(file);
     const renderGeneration = ++state.renderGeneration;
@@ -359,6 +367,7 @@ export default class SolomonChatPlugin extends Plugin {
         : Math.min(state.visibleStart, initialVisibleStart(conversation.messages.length));
       renderTasks.push(...this.renderVisibleTranscript(state));
     } else if (appended) {
+      state.messages.querySelector(".solomon-chat-empty")?.remove();
       for (let index = oldCount; index < conversation.messages.length; index++) renderTasks.push(this.renderMessage(state, index, true));
     }
     state.lastMessageCount = conversation.messages.length;
@@ -370,11 +379,13 @@ export default class SolomonChatPlugin extends Plugin {
     const renderedState = state;
     void Promise.all(renderTasks).then(() => window.setTimeout(() => {
       if (renderedState.renderGeneration !== renderGeneration) return;
-      if (renderedState.initialScrollPending || appended && (renderedState.scrollAfterNextAppend || nearBottom)) {
-        renderedState.messages.scrollTop = renderedState.messages.scrollHeight;
+      if (renderedState.initialScrollPending || renderedState.followingLatest) {
+        renderedState.followingLatest = true;
         this.setLatestVisible(renderedState, false);
+        renderedState.messages.scrollTop = renderedState.messages.scrollHeight;
         renderedState.initialScrollPending = false;
       } else if (appended) {
+        renderedState.followingLatest = false;
         renderedState.messages.scrollTop = previousScrollTop;
         this.setLatestVisible(renderedState, true);
       } else if (!canReuseTranscript && !firstRender) {
@@ -391,6 +402,7 @@ export default class SolomonChatPlugin extends Plugin {
 
   private renderVisibleTranscript(state: ViewState): Promise<void>[] {
     const tasks: Promise<void>[] = [];
+    for (const message of Array.from(state.messages.children)) state.resizeObserver.unobserve(message);
     state.messages.empty();
     if (state.conversation.preamble) {
       const preamble = state.messages.createDiv({ cls: "solomon-chat-preamble" });
@@ -416,6 +428,7 @@ export default class SolomonChatPlugin extends Plugin {
 
   private loadEarlierMessages(state: ViewState): void {
     if (state.visibleStart <= 0) return;
+    state.followingLatest = false;
     const anchor = this.captureScrollAnchor(state);
     state.visibleStart = previousVisibleStart(state.visibleStart);
     state.component.unload(); state.component = new Component(); state.component.load();
@@ -504,6 +517,7 @@ export default class SolomonChatPlugin extends Plugin {
       attr: { role: "article", "data-message-index": String(index), "data-message-id": message.id || "" },
     });
     const name = message.side === "left" ? state.conversation.leftName : state.conversation.rightName;
+    state.resizeObserver.observe(wrapper);
     wrapper.setAttribute("aria-label", `Message from ${name}${message.timestamp ? ` at ${this.formatTimestamp(message.timestamp)}` : ""}`);
     if (this.settings.showTimestamps && !groupedBefore) wrapper.createDiv({ cls: "solomon-chat-meta", text: message.timestamp ? `${name} · ${this.formatTimestamp(message.timestamp)}` : name });
     const row = wrapper.createDiv({ cls: "solomon-chat-message-row" });

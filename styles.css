@@ -58,7 +58,7 @@
   overscroll-behavior: contain;
   padding: 12px clamp(2px, 1.5vw, 12px);
   scrollbar-width: none;
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
   width: min(100%, var(--solomon-content-width));
   -webkit-overflow-scrolling: touch;
 }
@@ -137,7 +137,7 @@
 .solomon-chat-empty h3 { color: var(--text-normal); margin-bottom: 0; text-wrap: balance; }
 .solomon-chat-empty p { line-height: 1.55; text-wrap: pretty; }
 
-.solomon-chat-message { display: flex; flex-direction: column; max-width: 100%; }
+.solomon-chat-message { display: flex; flex: 0 0 auto; flex-direction: column; max-width: 100%; }
 .solomon-chat-message.is-left { align-items: flex-start; }
 .solomon-chat-message.is-right { align-items: flex-end; }
 .solomon-chat-message.is-grouped-before { margin-top: -6px; }
