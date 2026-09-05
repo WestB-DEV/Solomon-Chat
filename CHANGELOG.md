@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — private test candidate
+## 1.2.0 — private RC1 (2026-09-05, not publicly released)
 
 ### Added
 
@@ -12,5 +12,6 @@
 - Keep the same focus-eligible composer during sending instead of toggling read-only mode and refocusing it afterward. Briefly guard draft edits while saving to prevent data loss.
 - Preserve the reader's focus and text selection across rendering and send completion.
 - Remove the empty-chat prompt after the first message and follow the latest message across rendering and layout changes without pulling readers out of history.
+- Preserve own-send scroll intent through unchanged refreshes during a slow save, and keep the Latest control available after duplicate renders.
 
 Native iPhone keyboard/header acceptance remains pending. These changes have not been publicly released.
