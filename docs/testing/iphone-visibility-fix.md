@@ -24,6 +24,14 @@ The exact reported native iPhone upper-right overlay was not reproduced on a phy
 
 The old temporary CSS-only test was discarded as evidence because its container was incorrectly sized. The committed regression executes the plugin's real rendering methods with a correctly sized host.
 
+### Baseline validation follow-up
+
+Compiled original `4bae8fe:src/plugin.ts` with esbuild against unchanged supporting modules and tested it with the same corrected host and current CSS (isolating JavaScript behavior). At 375×667 it fails `first append removes the empty prompt` (`empty: true`). Running the separate `SCENARIO=scroll` path also fails `append and duplicate render follow latest`. The fixed bundle passes both checks and the complete five-layout matrix, including sequential settled appends followed by a rapid batch and duplicate render.
+
+Measured initial transcript client heights: 469, 646, 188, 717, and 720 pixels respectively. The harness now asserts a client height greater than 100 pixels. These results prove the prompt-removal and render-scroll regressions, not a physical iPhone header-overlap reproduction or a failing flex-shrink baseline.
+
+To compare a separately built baseline, set `PLUGIN_BUNDLE` to its bundle path; set `SCENARIO=scroll` to continue past the known empty-prompt failure and independently test scrolling. Unset both for the full fixed-build test. Baseline runs do not overwrite the fixed screenshot.
+
 ## Reproduce on Windows
 
 Build with `node esbuild.config.mjs production`. With Playwright available, run `node tests/chat-browser-regression.cjs`; set `PLAYWRIGHT_MODULE` to its installed module directory if it is not discoverable normally. Microsoft Edge must be installed. The fixture does not modify a vault or an existing browser session.
