@@ -133,6 +133,38 @@ const repo = path.resolve(__dirname, '..');
         return {success,failure,noSteal};
       });
       assert.deepEqual(sendFlow,{success:true,failure:true,noSteal:true});
+      if(mobile){
+        const touchSend=await page.evaluate(async()=>{
+          const state=plugin.states.get(leaf),textarea=state.textarea,send=state.send;
+          let writes=0,release;plugin.app.vault.process=async()=>{writes++;await new Promise(r=>release=r);};
+          textarea.value='Touch send';textarea.dispatchEvent(new Event('input'));textarea.focus();
+          let blurs=0;const recordBlur=()=>blurs++;textarea.addEventListener('blur',recordBlur);
+          // Model a bubbling outside-input dismiss handler. This is a host-contract
+          // regression, not a claim that desktop Chromium reproduces the iOS keyboard.
+          const dismiss=event=>{if(!event.defaultPrevented && event.target!==textarea)textarea.blur();};
+          document.addEventListener('touchstart',dismiss);document.addEventListener('touchend',dismiss);
+          const rect=send.getBoundingClientRect();
+          const finger={identifier:1,clientX:rect.x+rect.width/2,clientY:rect.y+rect.height/2};
+          const touch=(type,point=finger)=>{const e=new Event(type,{bubbles:true,cancelable:true});Object.defineProperties(e,{touches:{value:type==='touchend'?[]:[point]},changedTouches:{value:[point]}});send.dispatchEvent(e);return e;};
+          touch('touchstart');const end=touch('touchend');
+          if(!end.defaultPrevented)send.click();
+          await settle();send.click();await settle();
+          const during=document.activeElement===textarea;
+          release?.();await settle();
+          const result={during,after:document.activeElement===textarea,blurs,writes,cleared:textarea.value===''};
+          document.removeEventListener('touchstart',dismiss);document.removeEventListener('touchend',dismiss);textarea.removeEventListener('blur',recordBlur);
+          textarea.value='Keep canceled gesture';textarea.dispatchEvent(new Event('input'));
+          touch('touchstart');touch('touchmove',{...finger,clientX:finger.clientX+30});touch('touchend');
+          touch('touchstart');touch('touchcancel');touch('touchend');
+          touch('touchstart');touch('touchend',{...finger,clientX:rect.right+20});
+          const multi=new Event('touchstart',{bubbles:true,cancelable:true});Object.defineProperty(multi,'touches',{value:[finger,{...finger,identifier:2}]});send.dispatchEvent(multi);touch('touchend');
+          await settle();result.canceled=writes===1&&textarea.value==='Keep canceled gesture';
+          textarea.blur();send.click();result.clickFocus=document.activeElement===textarea;
+          await settle();release?.();await settle();result.clickSent=writes===2&&textarea.value==='';
+          return result;
+        });
+        assert.deepEqual(touchSend,{during:true,after:true,blurs:0,writes:1,cleared:true,canceled:true,clickFocus:true,clickSent:true},'touch Send must retain composer focus, reject canceled gestures and support click-only activation');
+      }
       const background=await page.evaluate(()=>{
         const state=plugin.states.get(leaf);
         state.conversation.backgroundColor='#aabbcc';plugin.applyBackground(state);

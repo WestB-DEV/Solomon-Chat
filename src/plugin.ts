@@ -326,7 +326,42 @@ export default class SolomonChatPlugin extends Plugin {
       if (shouldSubmitComposerKey({ composing: event.isComposing, key: event.key, mobile: Platform.isMobile, shift: event.shiftKey })) { event.preventDefault(); void this.submit(state); }
     });
     send.addEventListener("pointerdown", (event: PointerEvent) => event.preventDefault());
-    send.addEventListener("click", () => void this.submit(state));
+    const sendFromGesture = () => {
+      if (send.disabled) return;
+      // iOS only permits keyboard focus reliably inside the initiating gesture.
+      // Never refocus after the asynchronous save, when the user may have moved on.
+      if (Platform.isMobile) textarea.focus({ preventScroll: true });
+      void this.submit(state);
+    };
+    send.addEventListener("click", (event) => {
+      event.preventDefault(); event.stopPropagation(); sendFromGesture();
+    });
+    if (Platform.isMobile) {
+      let sendTouch: { id: number; x: number; y: number } | undefined;
+      send.addEventListener("touchstart", (event: TouchEvent) => {
+        sendTouch = undefined;
+        if (send.disabled || event.touches.length !== 1) return;
+        const touch = event.touches[0];
+        sendTouch = { id: touch.identifier, x: touch.clientX, y: touch.clientY };
+        // Pointer cancellation alone does not cancel touch defaults or host handlers.
+        event.preventDefault(); event.stopPropagation();
+      }, { passive: false });
+      send.addEventListener("touchmove", (event: TouchEvent) => {
+        const touch = event.touches[0];
+        if (!touch || event.touches.length !== 1 || !sendTouch || touch.identifier !== sendTouch.id
+          || Math.hypot(touch.clientX - sendTouch.x, touch.clientY - sendTouch.y) > 10) sendTouch = undefined;
+      }, { passive: true });
+      send.addEventListener("touchcancel", () => { sendTouch = undefined; });
+      send.addEventListener("touchend", (event: TouchEvent) => {
+        const start = sendTouch; sendTouch = undefined;
+        if (!start) return;
+        event.preventDefault(); event.stopPropagation();
+        const touch = Array.from(event.changedTouches).find((item) => item.identifier === start.id);
+        const bounds = send.getBoundingClientRect();
+        if (touch && !event.touches.length && touch.clientX >= bounds.left && touch.clientX <= bounds.right
+          && touch.clientY >= bounds.top && touch.clientY <= bounds.bottom) sendFromGesture();
+      }, { passive: false });
+    }
     sender.addEventListener("pointerdown", (event: PointerEvent) => event.preventDefault());
     sender.addEventListener("click", () => void this.switchSpeaker(state.file));
     attach.addEventListener("pointerdown", (event: PointerEvent) => event.preventDefault());

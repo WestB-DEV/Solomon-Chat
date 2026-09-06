@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1 (2026-09-06)
+
+- Address the iPhone 13 report of the keyboard closing on Send: handle mobile touch activation inside the composer, cancel touch defaults, and focus synchronously during the gesture rather than after saving.
+- Reject canceled, dragged, multi-touch-start and out-of-bounds Send gestures; retain click-only accessibility activation and duplicate-send protection.
+- Add a failing-before/passing-after modeled host-dismiss regression, while retaining slow-save and no-focus-steal checks. Android emulator touch-send verification passes; resolution on a physical iPhone is awaiting user confirmation.
+
 ## 1.2.0 (2026-09-06)
 
 ### Added
