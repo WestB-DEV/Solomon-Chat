@@ -362,8 +362,9 @@ export default class SolomonChatPlugin extends Plugin {
       && oldCount <= conversation.messages.length
       && previousConversation.messages.every((message, index) => this.sameMessage(message, conversation.messages[index]));
     const appended = canReuseTranscript && conversation.messages.length > oldCount;
-    if (state.initialScrollPending || appended && state.scrollAfterNextAppend) state.followingLatest = true;
-    if (appended) {
+    const receivedMessages = oldPath === file.path && conversation.messages.length > oldCount;
+    if (state.initialScrollPending || receivedMessages && state.scrollAfterNextAppend) state.followingLatest = true;
+    if (receivedMessages) {
       state.scrollAfterNextAppend = false;
       this.setLatestVisible(state, !state.followingLatest);
     }
@@ -376,7 +377,7 @@ export default class SolomonChatPlugin extends Plugin {
     this.applyBackground(state);
     this.updateSpeakerControls(state);
     if (!canReuseTranscript) {
-      this.setLatestVisible(state, false);
+      if (!receivedMessages) this.setLatestVisible(state, false);
       state.component.unload(); state.component = new Component(); state.component.load();
       state.visibleStart = firstRender || oldPath !== file.path
         ? initialVisibleStart(conversation.messages.length)
@@ -400,7 +401,7 @@ export default class SolomonChatPlugin extends Plugin {
         this.setLatestVisible(renderedState, false);
         renderedState.messages.scrollTop = renderedState.messages.scrollHeight;
         renderedState.initialScrollPending = false;
-      } else if (appended) {
+      } else if (receivedMessages) {
         renderedState.followingLatest = false;
         renderedState.messages.scrollTop = previousScrollTop;
         this.setLatestVisible(renderedState, true);
@@ -725,13 +726,14 @@ export default class SolomonChatPlugin extends Plugin {
 
   private openBackgroundModal(state: ViewState): void {
     const file = state.file;
-    new FormModal(this.app, { title: "Chat background", initial: {
+    const modal: FormModal = new FormModal(this.app, { title: "Chat background", initial: {
       color: state.conversation.backgroundColor, image: state.conversation.backgroundImage,
     }, fields: [
       { key: "color", name: "Background color", type: "color", description: "Choose a color, or use the reset button for the theme default." },
-      { key: "image", name: "Wallpaper image", placeholder: "Wallpapers/quiet-sky.jpg", description: "Optional image path from your vault root. Clear to remove. PNG, JPEG, WebP, GIF, or AVIF. No remote images." },
+      { key: "image", name: "Wallpaper image", placeholder: "Choose a picture or enter a vault path", description: "Choose a picture already in your vault. Add your photo to the vault first if needed. Clear the path to remove the wallpaper.", choosePicture: true },
     ], onSubmit: async (values) => {
-      const color = chatBackgroundColor(values.color), image = chatBackgroundImage(values.image);
+      const color = chatBackgroundColor(values.color);
+      const image = chatBackgroundImage(values.image);
       if (values.color.trim() && !color) throw new Error("Choose a valid background color.");
       if (values.image.trim() && (!image || !(this.app.vault.getAbstractFileByPath(image) instanceof TFile))) throw new Error("Choose an existing supported image inside your vault, using its vault-relative path.");
       await this.queue(file.path, async () => this.app.fileManager.processFrontMatter(file, (fm: Frontmatter) => {
@@ -740,7 +742,8 @@ export default class SolomonChatPlugin extends Plugin {
       for (const current of this.states.values()) if (current.file === file) {
         current.conversation.backgroundColor = color; current.conversation.backgroundImage = image; this.applyBackground(current);
       }
-    } }).open();
+    } });
+    modal.open();
   }
 
   private openEditModal(file: TFile, target: ChatMessage): void {

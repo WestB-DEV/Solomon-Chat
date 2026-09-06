@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0 — private RC2 (2026-09-06, not publicly released)
+
+- Add Obsidian's native searchable picture chooser for vault-local chat wallpapers.
+- Preserve follow-latest behavior when a concurrent edit forces transcript rebuilding; keep Latest available while reading history.
+- Keep the mobile keyboard Enter/newline action and persistent composer covered by regression tests.
+- Account for Obsidian's raised mobile navigation bar so it does not overlap the composer.
+- Prevent dismissal and editing during asynchronous form saves.
+
+Windows and Android emulator smoke tests pass; physical iPhone acceptance remains unverified.
+
 ## 1.2.0 — private RC1 (2026-09-05, not publicly released)
 
 ### Added

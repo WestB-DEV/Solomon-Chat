@@ -43,7 +43,7 @@
 }
 
 .solomon-chat-bottom-inset-probe {
-  height: var(--mobile-toolbar-height, 0px);
+  height: calc(var(--mobile-toolbar-height, 0px) + var(--navbar-bottom-offset, 0px));
   pointer-events: none;
   position: absolute;
   visibility: hidden;

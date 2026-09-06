@@ -1,4 +1,5 @@
-import { Modal, Platform, Setting } from "obsidian";
+import { FuzzySuggestModal, Modal, Platform, Setting, TFile } from "obsidian";
+import { chatBackgroundImage } from "./background";
 
 export interface FieldSpec {
   key: string;
@@ -6,9 +7,11 @@ export interface FieldSpec {
   description?: string;
   placeholder?: string;
   type?: "text" | "textarea" | "color";
+  choosePicture?: boolean;
 }
 
 export class FormModal extends Modal {
+  private saving = false;
   constructor(
     app: ConstructorParameters<typeof Modal>[0],
     private readonly options: {
@@ -49,6 +52,11 @@ export class FormModal extends Modal {
         setting.addText((component) => {
           component.setValue(values[field.key] || "").setPlaceholder(field.placeholder || "").onChange((value) => values[field.key] = value);
           firstInput ||= component.inputEl;
+          if (field.choosePicture) setting.addButton((button) => button.setButtonText("Choose picture").onClick(() => {
+            new PictureModal(this.app, (value) => {
+              if (this.modalEl.isConnected && !this.saving) { values[field.key] = value; component.setValue(value); }
+            }).open();
+          }));
         });
       }
     }
@@ -62,15 +70,32 @@ export class FormModal extends Modal {
   }
 
   private async submit(values: Record<string, string>, submit: HTMLButtonElement, status: HTMLElement): Promise<void> {
+      if (this.saving) return;
+      this.saving = true;
+      this.contentEl.inert = true;
+      this.contentEl.setAttribute("aria-busy", "true");
       submit.disabled = true;
       status.textContent = "";
       try {
-        if (await this.options.onSubmit(values) !== false) this.close();
+        if (await this.options.onSubmit({ ...values }) !== false) { this.saving = false; this.close(); }
       } catch (error) {
         console.error("Solomon Chat: form action failed", error);
         status.textContent = error instanceof Error ? error.message : "The change could not be saved.";
-      } finally { submit.disabled = false; }
+      } finally { this.saving = false; this.contentEl.inert = false; this.contentEl.removeAttribute("aria-busy"); submit.disabled = false; }
   }
+
+  close(): void { if (!this.saving) super.close(); }
+}
+
+class PictureModal extends FuzzySuggestModal<TFile> {
+  constructor(app: ConstructorParameters<typeof Modal>[0], private readonly choose: (path: string) => void) {
+    super(app);
+    this.setPlaceholder("Find a picture in your vault…");
+    this.emptyStateText = "No pictures found. Add a PNG, JPEG, WebP, GIF, or AVIF image to your vault first.";
+  }
+  getItems(): TFile[] { return this.app.vault.getFiles().filter((file) => !!chatBackgroundImage(file.path)); }
+  getItemText(file: TFile): string { return file.path; }
+  onChooseItem(file: TFile): void { this.choose(file.path); }
 }
 
 export class ConfirmModal extends Modal {

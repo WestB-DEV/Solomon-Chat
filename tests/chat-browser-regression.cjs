@@ -14,6 +14,7 @@ const repo = path.resolve(__dirname, '..');
       await page.setContent('<style>'+fs.readFileSync(path.join(repo,'styles.css'),'utf8')+'</style><style>body{margin:0;font:16px Arial;--background-primary:white;--text-normal:black;--interactive-accent:#4477dd;--background-modifier-hover:#ddd}.solomon-chat-view-content{position:absolute;top:70px;bottom:0;width:100%}*{box-sizing:border-box}</style>');
       await page.evaluate((dark)=>{for(const [key,value] of Object.entries({'--background-primary':dark?'#202020':'#ffffff','--background-primary-alt':dark?'#282828':'#f6f6f6','--text-normal':dark?'#eeeeee':'#111111','--text-muted':dark?'#bbbbbb':'#555555','--background-modifier-border':dark?'#444444':'#dddddd'}))document.body.style.setProperty(key,value);},dark);
       await page.evaluate((mobile) => {
+        if(mobile){document.body.style.setProperty('--mobile-toolbar-height','52px');document.body.style.setProperty('--navbar-bottom-offset','max(24px, 12px)');}
         HTMLElement.prototype.createEl = function(tag, options={}) { const el=document.createElement(tag); if(options.cls) el.className=options.cls; if(options.text) el.textContent=options.text; for(const [k,v] of Object.entries(options.attr||{})) el.setAttribute(k,v); this.append(el); return el; };
         HTMLElement.prototype.createDiv = function(o){return this.createEl('div',o);};
         HTMLElement.prototype.createSpan = function(o){return this.createEl('span',o);};
@@ -26,12 +27,14 @@ const repo = path.resolve(__dirname, '..');
         class Base {load(){} unload(){} }
         class Plugin extends Base {constructor(){super(); this.app={workspace:{on(){},onLayoutReady(){}},vault:{on(){}},metadataCache:{on(){}}};} async loadData(){return null;} registerView(_id,f){window.viewFactory=f;} addRibbonIcon(){} addCommand(){} addSettingTab(){} registerEvent(){} registerDomEvent(){} register(){} }
         class TextFileView extends Base {constructor(leaf){super();this.leaf=leaf;this.containerEl=document.body.createDiv();this.contentEl=this.containerEl.createDiv();} addAction(){return this.containerEl.createEl('button');}}
-        class Modal extends Base {open(){this.modalEl=document.body.createDiv();this.modalEl.setCssProps({position:'fixed',inset:'10px','z-index':'100',background:'white',overflow:'auto'});this.contentEl=this.modalEl.createDiv();this.onOpen();}close(){this.modalEl.remove();}setTitle(title){this.modalEl.setAttribute('role','dialog');this.modalEl.setAttribute('aria-label',title);}}
+        class Modal extends Base {constructor(app){super();this.app=app;}open(){this.modalEl=document.body.createDiv();this.modalEl.setCssProps({position:'fixed',inset:'10px','z-index':'100',background:'white',overflow:'auto'});this.contentEl=this.modalEl.createDiv();this.onOpen();}close(){this.modalEl.remove();}setTitle(title){this.modalEl.setAttribute('role','dialog');this.modalEl.setAttribute('aria-label',title);}}
+        class FuzzySuggestModal extends Modal {setPlaceholder(){}onOpen(){this.setTitle('Choose vault picture');for(const item of this.getItems()){this.contentEl.createEl('button',{text:this.getItemText(item)}).addEventListener('click',()=>{this.close();this.onChooseItem(item);});}}}
         class Setting {constructor(parent){this.el=parent.createDiv();}setName(name){this.name=name;return this;}setDesc(text){this.el.setAttribute('data-description',text);return this;}
           addText(callback){return this.input('text',callback);}addColorPicker(callback){return this.input('color',callback);}
           input(type,callback){const el=this.el.createEl('input',{attr:{type,'aria-label':this.name}});const c={inputEl:el,setValue(v){el.value=v;return c;},setPlaceholder(v){el.placeholder=v;return c;},onChange(fn){el.addEventListener('input',()=>fn(el.value));return c;}};callback(c);return this;}
+          addButton(callback){const el=this.el.createEl('button');const c={setButtonText(v){el.textContent=v;return c;},setDisabled(v){el.disabled=v;return c;},onClick(fn){el.addEventListener('click',fn);return c;}};callback(c);return this;}
           addExtraButton(callback){const el=this.el.createEl('button');const c={setIcon(){return c;},setTooltip(v){el.setAttribute('aria-label',v);return c;},onClick(fn){el.addEventListener('click',fn);return c;}};callback(c);return this;}}
-        window.require=()=>({Plugin,Component:Base,TextFileView,MarkdownView:Base,Modal,Setting,PluginSettingTab:Base,TFile:Base,TFolder:Base,Notice:Base,Menu:Base,Platform:{isMobile:mobile},setIcon(){},normalizePath:p=>p,MarkdownRenderer:{async render(_app,text,el){el.createEl('p',{text});}}});
+        window.require=()=>({Plugin,Component:Base,TextFileView,MarkdownView:Base,Modal,FuzzySuggestModal,Setting,PluginSettingTab:Base,TFile:Base,TFolder:Base,Notice:Base,Menu:Base,Platform:{isMobile:mobile},setIcon(){},normalizePath:p=>p,MarkdownRenderer:{async render(_app,text,el){el.createEl('p',{text});}}});
         window.module={exports:{}};
       },mobile);
       await page.addScriptTag({content:fs.readFileSync(process.env.PLUGIN_BUNDLE || path.join(repo,'main.js'),'utf8')});
@@ -51,6 +54,7 @@ const repo = path.resolve(__dirname, '..');
       assert.ok(first.clientHeight>100,'host provides a usable transcript height');
       if(process.env.SCENARIO!=='scroll')assert.equal(first.empty,false,'first append removes the empty prompt');
       assert.ok(first.top>=first.viewTop);
+      if(mobile)assert.equal(await page.locator('.solomon-chat-bottom-inset-probe').evaluate(el=>el.getBoundingClientRect().height),76,'closed mobile clearance includes raised native navbar offset');
       if(width===390 && !dark && !process.env.PLUGIN_BUNDLE)await page.screenshot({path:path.join(repo,'docs/testing/iphone-message-containment-regression.png')});
       await page.evaluate(async()=>{for(let i=0;i<3;i++){append();await settle();}for(let i=0;i<30;i++)append();draw();await settle();});
       const bottom=()=>page.evaluate(()=>{const m=document.querySelector('.solomon-chat-messages');return m.scrollHeight-m.clientHeight-m.scrollTop;});
@@ -77,6 +81,20 @@ const repo = path.resolve(__dirname, '..');
         append();await settle();
       });
       assert.ok(await bottom()<2,'unchanged refresh before own append preserves latest-message intent');
+      await page.evaluate(async()=>{
+        const state=plugin.states.get(leaf);
+        state.messages.scrollTop=100;await settle();
+        state.scrollAfterNextAppend=true;
+        chat.messages[0]={...chat.messages[0],content:'Earlier message edited concurrently'};
+        append();await settle();
+      });
+      assert.ok(await bottom()<2,'own send follows latest even when refresh rebuilds transcript');
+      await page.evaluate(async()=>{
+        const state=plugin.states.get(leaf);state.messages.scrollTop=100;await settle();
+        chat.messages[0]={...chat.messages[0],content:'Another earlier edit'};append();draw();await settle();
+      });
+      assert.equal(await page.getByRole('button',{name:'Jump to latest message',exact:true}).getAttribute('aria-hidden'),'false','incoming rebuild keeps Latest available in history');
+      await page.getByRole('button',{name:'Jump to latest message',exact:true}).click();
       const composer=await page.evaluate(async()=>{
         const state=plugin.states.get(leaf), textarea=state.textarea;
         textarea.focus();textarea.value='Message being sent';textarea.dispatchEvent(new Event('input'));
@@ -132,6 +150,7 @@ const repo = path.resolve(__dirname, '..');
         plugin.openBackgroundModal(state);
       });
       await page.getByRole('textbox',{name:'Wallpaper image',exact:true}).fill('https://example.com/remote.png');
+      assert.equal(await page.getByRole('button',{name:'Choose picture',exact:true}).count(),1,'picture chooser is available without typing a path');
       await page.getByRole('button',{name:'Save',exact:true}).click();
       assert.match(await page.getByRole('alert').innerText(),/existing supported image/);
       await page.getByRole('textbox',{name:'Wallpaper image',exact:true}).fill('');
@@ -145,6 +164,37 @@ const repo = path.resolve(__dirname, '..');
       await page.evaluate(()=>settle());
       assert.deepEqual(await page.evaluate(()=>window.savedBackground),{});
       assert.equal(await page.evaluate(()=>plugin.states.get(leaf).root.classList.contains('has-custom-background')),false);
+      await page.evaluate(()=>{
+        const image=new (window.require().TFile)();image.path='Wallpapers/sky.png';
+        const files=new Map([[image.path,image]]);
+        plugin.app.vault.getAbstractFileByPath=p=>files.get(p)||null;
+        plugin.app.vault.getFiles=()=>[image,{path:'Notes/private.md'},{path:'Wallpapers/unsafe.svg'}];
+        plugin.app.vault.getResourcePath=()=> 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6N8AAAAASUVORK5CYII=';
+        plugin.openBackgroundModal(plugin.states.get(leaf));
+      });
+      await page.getByRole('button',{name:'Choose picture',exact:true}).click();
+      assert.equal(await page.getByRole('button',{name:'Notes/private.md',exact:true}).count(),0);
+      assert.equal(await page.getByRole('button',{name:'Wallpapers/unsafe.svg',exact:true}).count(),0);
+      await page.getByRole('button',{name:'Wallpapers/sky.png',exact:true}).click();
+      assert.equal(await page.getByRole('textbox',{name:'Wallpaper image',exact:true}).inputValue(),'Wallpapers/sky.png');
+      await page.evaluate(()=>{plugin.app.fileManager.processFrontMatter=async(_file,update)=>{await new Promise(resolve=>{window.releasePictureSave=resolve;});window.savedBackground={};update(window.savedBackground);};});
+      await page.getByRole('button',{name:'Save',exact:true}).click();
+      await page.waitForFunction(()=>!!window.releasePictureSave);
+      const busy=await page.evaluate(()=>{const modal=document.querySelector('[aria-label="Chat background"]');const cancel=[...modal.querySelectorAll('button')].find(e=>e.textContent==='Cancel');cancel.click();return {open:modal.isConnected,inert:modal.querySelector('[aria-busy="true"]')?.inert};});
+      assert.deepEqual(busy,{open:true,inert:true},'pending saves freeze controls and cannot be cancelled midway');
+      await page.evaluate(()=>window.releasePictureSave());
+      await page.waitForFunction(()=>!document.querySelector('[role="dialog"]'));
+      const imported=await page.evaluate(()=>({path:window.savedBackground['chat-background-image'],applied:getComputedStyle(plugin.states.get(leaf).root).backgroundImage}));
+      assert.equal(imported.path,'Wallpapers/sky.png');
+      assert.match(imported.applied,/url\(/);
+      if(mobile){
+        const textarea=page.getByRole('textbox',{name:'Message',exact:true});
+        await textarea.fill('First line');
+        await textarea.press('Enter');
+        await textarea.press('a');
+        assert.equal(await textarea.inputValue(),'First line\na','mobile Enter inserts a newline, never sends');
+        assert.equal(await textarea.getAttribute('enterkeyhint'),'enter');
+      }
       const wallpaper=await page.evaluate(()=>{
         const state=plugin.states.get(leaf),image=new (window.require().TFile)();
         plugin.app.vault.getAbstractFileByPath=(path)=>path==='Wallpapers/test.png'?image:null;

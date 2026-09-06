@@ -17,11 +17,11 @@ if (manifest.version !== readJson('package.json').version
 }
 if (!process.argv[2]) throw new Error('Provide an output parent directory outside the repository.');
 const commit = git('rev-parse', 'HEAD');
-const destination = path.resolve(process.argv[2], `solomon-chat-${manifest.version}-rc1-${commit.slice(0, 7)}`);
+const destination = path.resolve(process.argv[2], `solomon-chat-${manifest.version}-rc2-${commit.slice(0, 7)}`);
 const relative = path.relative(root, destination);
 if (!relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) throw new Error('Output must be outside repository.');
 mkdirSync(destination); // Never overwrite an existing candidate.
-const sources = ['main.js', 'manifest.json', 'styles.css', 'docs/releases/1.2.0-rc1.md', 'docs/testing/beta-closeout-20260905.md'];
+const sources = ['main.js', 'manifest.json', 'styles.css', 'docs/releases/1.2.0-rc2.md', 'docs/testing/beta-closeout-20260906.md'];
 const files = sources.map((source) => {
   const name = path.basename(source);
   const data = readFileSync(path.join(root, source));
@@ -29,7 +29,7 @@ const files = sources.map((source) => {
   return { name, bytes: data.length, sha256: createHash('sha256').update(data).digest('hex') };
 });
 writeFileSync(path.join(destination, 'candidate.json'), JSON.stringify({
-  version: manifest.version, channel: 'private-rc1', commit, branch: git('branch', '--show-current'),
+  version: manifest.version, channel: 'private-rc2', commit, branch: git('branch', '--show-current'),
   createdAt: new Date().toISOString(), publicRelease: false, files,
 }, null, 2) + '\n');
 process.stdout.write(destination + '\n');

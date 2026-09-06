@@ -53,7 +53,9 @@ You can give either character a name, bio, and vault image. You can also attach 
 
 ### Customize a chat background
 
-Open the conversation's **⋯** menu and choose **Chat background…**, or run **Solomon Chat: Change chat background** while in chat view. Pick a color and/or enter the vault-relative path of a wallpaper, such as `Wallpapers/quiet-sky.jpg`, then Save. Use the color reset button and clear the wallpaper field to return to the Obsidian theme.
+Open the conversation's **⋯** menu and choose **Chat background…**, or run **Solomon Chat: Change chat background** while in chat view. Select **Choose picture** to search pictures in your vault, or enter a vault-relative path such as `Wallpapers/quiet-sky.jpg`, then Save. Add photos to your vault first. You can also pick a color. Use the color reset button and clear the wallpaper field to return to the Obsidian theme.
+
+On mobile, the keyboard's Enter key inserts a new line; the chat's Send button sends the message. The composer stays mounted during sends. New messages follow automatically while you are at the bottom; reading older messages preserves your position and offers **Latest**.
 
 PNG, JPEG, WebP, GIF, and AVIF wallpapers are supported. Add the image to your vault first; images are not downloaded from remote URLs. Sync the image along with the conversation to use it on another device. Missing or renamed images fall back to the selected color or theme. Background preferences are stored in the conversation's `chat-background-color` and `chat-background-image` frontmatter; other chats are unaffected.
 
