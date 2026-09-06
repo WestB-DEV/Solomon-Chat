@@ -95,7 +95,7 @@ The small HTML comments preserve message identity and speaker position while rem
 - Familiar left and right message bubbles with automatic speaker switching
 - Editable participant names, bios, colors, and optional vault-image avatars
 - Picture and file attachments stored in message-specific subfolders beside the conversation, with ordinary relative Markdown links
-- Enter to send and Shift+Enter for a new line
+- Desktop Enter to send and Shift+Enter for a new line; mobile Enter inserts a new line and the chat Send button sends
 - Discoverable message actions by tap, keyboard focus, right-click, or long-press; deletion requires confirmation
 - Optional perspective prompts inspired by self-distancing research
 - Raw Markdown mode and readable text transcript export
@@ -108,11 +108,13 @@ The small HTML comments preserve message identity and speaker position while rem
 
 ### Obsidian Community Plugins
 
-Once the community listing is approved:
+Open the [Solomon Chat community listing](https://community.obsidian.md/plugins/solomon-chat), or:
 
 1. Open **Settings > Community plugins** in Obsidian.
 2. Select **Browse** and search for **Solomon Chat**.
 3. Select **Install**, then **Enable**.
+
+For an existing installation, use **Check for updates** in Community plugins. Confirm version **1.2.0** for the persistent composer, scrolling and wallpaper update; directory processing may lag behind GitHub publication.
 
 ### Manual installation
 

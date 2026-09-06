@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.0 (2026-09-06)
+
+### Added
+
+- Per-conversation picture wallpapers and colors, with Obsidian's native searchable vault picture chooser.
+
+### Fixed
+
+- Keep the drafting UI mounted and focused through sends, avoiding deliberate keyboard dismissal/reopening.
+- Follow new messages reliably after rendering, resizing, and concurrent transcript edits; preserve history-reading position with a Latest control.
+- Use mobile Enter for new lines and the chat Send button for sending.
+- Clear Obsidian's raised mobile navigation bar without adding duplicate keyboard spacing.
+- Guard asynchronous form saves against duplicate submissions and premature dismissal.
+
+Published from the tested RC2 implementation. Windows and Android emulator smoke tests, 45 unit tests and ten responsive browser cases passed. Physical iPhone testing remains unverified and feedback is welcome. Earlier RC entries below are historical records.
+
 ## 1.2.0 — private RC2 (2026-09-06, not publicly released)
 
 - Add Obsidian's native searchable picture chooser for vault-local chat wallpapers.
