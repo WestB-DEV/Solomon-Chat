@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0 (2026-09-06)
+
+### Added
+
+- Type `[[` in the composer for existing-note suggestions or an unresolved new-note link.
+- Sent unresolved links stay dimmed and create/open their target only when clicked, using Obsidian's vault rules and backlink indexing.
+- Create linked Solomon conversations from a Markdown note, inserting the link at the captured cursor. Standalone creation remains available.
+
+### Verified
+
+- 58 unit tests, ten desktop/mobile browser layouts, and native Android emulator checks for pending-note creation, backlinks, linked-conversation creation, and suggestion taps without keyboard blur.
+- Physical iPhone testing remains unverified. Standard hyperlinks retain Obsidian's behavior. No data migration is required; the previous 1.2.1 release remains available for rollback.
+
 ## 1.2.1 (2026-09-06)
 
 - Address the iPhone 13 report of the keyboard closing on Send: handle mobile touch activation inside the composer, cancel touch defaults, and focus synchronously during the gesture rather than after saving.
