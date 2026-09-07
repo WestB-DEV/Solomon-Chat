@@ -51,6 +51,14 @@ Solomon Chat does not try to give you answers. It gives you a simple structure f
 
 You can give either character a name, bio, and vault image. You can also attach pictures and files to the conversation just as you would in a normal message thread.
 
+### Link notes and conversations
+
+Type `[[` in the message box to suggest existing vault notes. Choose with the arrow keys and Enter, or tap a suggestion. An unknown name offers **create when opened**: sending `[[New idea]]` saves an unresolved link, not a new file. The link is dimmed until the target exists; clicking it lets Obsidian create and open the note using your vault settings. Sent messages are Markdown, so Obsidian indexes their links and backlinks normally. Standard web links and Markdown links use Obsidian's rendering and opening behavior.
+
+From a Markdown note, run **Solomon Chat: Create linked Solomon conversation** to insert a link at the captured cursor and open the new chat. The ordinary **Create new conversation** command remains standalone. If the source note changes while the dialog is open, the plugin will not insert into an unexpected location.
+
+The chat uses a compact textarea-compatible note suggestion menu, not the Markdown editor's built-in popup. Heading and alias links can still be typed manually, but do not have autocomplete.
+
 ### Customize a chat background
 
 Open the conversation's **⋯** menu and choose **Chat background…**, or run **Solomon Chat: Change chat background** while in chat view. Select **Choose picture** to search pictures in your vault, or enter a vault-relative path such as `Wallpapers/quiet-sky.jpg`, then Save. Add photos to your vault first. You can also pick a color. Use the color reset button and clear the wallpaper field to return to the Obsidian theme.

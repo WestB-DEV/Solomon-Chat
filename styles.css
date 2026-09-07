@@ -426,3 +426,23 @@
   .solomon-chat-send:not(:disabled):hover,
   .solomon-chat-sender:hover { box-shadow: none; }
 }
+/* Compact note suggestions stay above, rather than widening, the composer. */
+.solomon-chat-composer { position: relative; }
+.solomon-link-suggestions {
+  position: absolute;
+  bottom: 100%;
+  inset-inline: 8px;
+  z-index: 10;
+  max-height: min(180px, 25vh);
+  overflow-y: auto;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-s);
+  padding: 4px;
+}
+.solomon-link-suggestions[hidden] { display: none; }
+.solomon-link-option { padding: 10px; overflow-wrap: anywhere; cursor: pointer; border-radius: var(--radius-s); }
+.solomon-link-option[aria-selected="true"] { background: var(--background-modifier-hover); }
+.solomon-chat-root a.internal-link.is-unresolved { color: var(--link-unresolved-color, var(--text-muted)); opacity: var(--link-unresolved-opacity, 0.65); }

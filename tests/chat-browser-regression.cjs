@@ -40,6 +40,7 @@ const repo = path.resolve(__dirname, '..');
       await page.addScriptTag({content:fs.readFileSync(process.env.PLUGIN_BUNDLE || path.join(repo,'main.js'),'utf8')});
       await page.evaluate(async () => {
         window.plugin=new window.module.exports.default(); await plugin.onload();
+        plugin.saveData=async()=>{};
         plugin.restoreDraft=()=>'';
         window.leaf={}; leaf.view=window.viewFactory(leaf);
         window.file={path:'Test.md',basename:'Test'};leaf.view.file=file;
@@ -50,6 +51,34 @@ const repo = path.resolve(__dirname, '..');
         draw();await settle();append();await settle();
       });
       const first=await page.evaluate(()=>({empty:!!document.querySelector('.solomon-chat-empty'),clientHeight:document.querySelector('.solomon-chat-messages').clientHeight,top:document.querySelector('.solomon-chat-bubble').getBoundingClientRect().top,viewTop:leaf.view.contentEl.getBoundingClientRect().top}));
+      await page.evaluate(() => {
+        plugin.app.vault.getMarkdownFiles = () => [{path:'Notes/Existing.md'}];
+        plugin.app.metadataCache.fileToLinktext = f => f.path.replace(/\.md$/, '');
+        plugin.app.metadataCache.getFirstLinkpathDest = target => target === 'Notes/Existing' ? {} : null;
+      });
+      const linkInput = page.getByRole('textbox', {name:'Message',exact:true});
+      await linkInput.fill('See [[Existing');
+      await linkInput.press('ArrowDown');
+      await linkInput.press('Enter');
+      assert.equal(await linkInput.inputValue(), 'See [[Notes/Existing]]', 'existing completion never sends');
+      await linkInput.fill('See [[Brand new');
+      assert.equal(await page.getByRole('listbox').isVisible(), true);
+      const suggestionBounds = await page.getByRole('listbox').boundingBox();
+      assert.ok(suggestionBounds.x >= 0 && suggestionBounds.x + suggestionBounds.width <= width, 'suggestions stay in viewport');
+      await linkInput.press('Enter');
+      assert.equal(await linkInput.inputValue(), 'See [[Brand new]]', 'new link remains text');
+      await linkInput.fill('[[Unfinished');
+      await page.evaluate(() => {
+        const state=plugin.states.get(leaf);
+        state.hideLinkSuggestions();
+        state.textarea.value='';
+      });
+      assert.equal(await page.getByRole('listbox').isVisible(), false, 'send hides pending suggestions');
+      if (mobile) {
+        await linkInput.press('Enter');
+        assert.equal(await linkInput.inputValue(), '\n', 'no stale suggestion intercepts mobile Enter');
+      }
+      await linkInput.fill('');
       console.log(JSON.stringify({width,height,first}));
       assert.ok(first.clientHeight>100,'host provides a usable transcript height');
       if(process.env.SCENARIO!=='scroll')assert.equal(first.empty,false,'first append removes the empty prompt');

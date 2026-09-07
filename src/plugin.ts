@@ -1,5 +1,5 @@
 import {
-  Component, MarkdownRenderer, MarkdownView, Menu, Notice, Plugin, Platform, TFile, TFolder, TextFileView, WorkspaceLeaf, normalizePath, setIcon,
+  Component, MarkdownRenderer, MarkdownView, Menu, Notice, Plugin, Platform, TFile, TFolder, TextFileView, WorkspaceLeaf, getLinkpath, normalizePath, setIcon,
 } from "obsidian";
 import { attachmentMarkdown, attachmentValidationError, formatAttachmentSize, isImageAttachment } from "./attachments";
 import { chatBackgroundColor, chatBackgroundImage } from "./background";
@@ -11,6 +11,8 @@ import { appendMessageTransaction, currentTimestamp, hasMessageId, parseConversa
 import { SolomonSettingsTab } from "./settings";
 import { shouldRouteToChat, shouldSubmitComposerKey } from "./ui-behavior";
 import { calculateViewportLayout } from "./viewport";
+import { installLinkSuggestions } from "./link-suggestions";
+import { captureLinkedConversationSource, insertLinkedConversationLink, isLinkedConversationSourceCurrent, type LinkedConversationSource } from "./linked-conversation";
 
 interface ViewState {
   leaf: WorkspaceLeaf;
@@ -41,6 +43,7 @@ interface ViewState {
   followingLatest: boolean;
   renderGeneration: number;
   resizeObserver: ResizeObserver;
+  hideLinkSuggestions?: () => void;
 }
 
 interface PendingAttachment {
@@ -124,6 +127,13 @@ export default class SolomonChatPlugin extends Plugin {
     this.registerView(SOLOMON_CHAT_VIEW_TYPE, (leaf) => new SolomonChatView(leaf, this));
     this.addRibbonIcon("messages-square", "Create a conversation", () => this.openCreateModal());
     this.addCommand({ id: "create-conversation", name: "Create new conversation", callback: () => this.openCreateModal() });
+    this.addCommand({ id: "create-linked-conversation", name: "Create linked Solomon conversation", checkCallback: checking => {
+      const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+      const source = view && captureLinkedConversationSource(view);
+      if (!source) return false;
+      if (!checking) this.openCreateModal(source);
+      return true;
+    } });
     this.addCommand({ id: "edit-participants", name: "Edit conversation participants", checkCallback: (checking) => this.withActiveConversation(checking, (file) => this.openParticipantsModal(file)) });
     this.addCommand({ id: "chat-background", name: "Change chat background", checkCallback: (checking) => {
       const state = this.states.get(this.app.workspace.getLeaf(false));
@@ -152,6 +162,9 @@ export default class SolomonChatPlugin extends Plugin {
       if (draftMoved || cleanupMoved) void this.savePluginData();
     }));
     this.registerEvent(this.app.metadataCache.on("changed", (file) => this.scheduleFile(file)));
+    this.registerEvent(this.app.metadataCache.on("resolved", () => {
+      for (const state of this.states.values()) this.refreshLinkStates(state.messages, state.file.path);
+    }));
     this.registerDomEvent(window, "resize", () => this.scheduleViewport());
     this.registerDomEvent(document, "visibilitychange", () => {
       if (document.visibilityState === "hidden") void this.flushDrafts().catch((error) => console.error("Solomon Chat: draft flush failed", error));
@@ -311,6 +324,7 @@ export default class SolomonChatPlugin extends Plugin {
     resizeObserver.observe(messages);
     const state: ViewState = { leaf, file, root, messages, jumpToLatest, composer, textarea, sender, attachmentTray, attach, send, announcer, bottomInsetProbe, pendingAttachments: [], draft: restoredDraft, conversation, component, focused: false, sending: this.isFileBusy(file), blurTimer: 0, lastMessageCount: 0, renderSignature: "", scrollAfterNextAppend: false, visibleStart: initialVisibleStart(conversation.messages.length), initialScrollPending: true, followingLatest: true, renderGeneration: 0, resizeObserver };
 
+    state.hideLinkSuggestions = installLinkSuggestions(this.app, textarea, composer, () => state.file.path, () => state.sending);
     // readOnly can dismiss mobile keyboards. Guard edits without changing focus eligibility.
     textarea.addEventListener("beforeinput", (event) => { if (state.sending) event.preventDefault(); });
     textarea.addEventListener("input", () => {
@@ -385,6 +399,7 @@ export default class SolomonChatPlugin extends Plugin {
     const previousAnchor = state ? this.captureScrollAnchor(state) : null;
     if (!state) { state = this.createState(leaf, file, conversation); this.states.set(leaf, state); }
     if (oldPath && oldPath !== file.path) {
+      state.hideLinkSuggestions?.();
       state.draft = this.restoreDraft(file, conversation);
       state.pendingAttachments = [];
       state.scrollAfterNextAppend = false;
@@ -618,6 +633,7 @@ export default class SolomonChatPlugin extends Plugin {
     if ((!draft.trim() && !pending.length) || state.sending) return;
     const file = state.file;
     if (this.inFlightFiles.has(file)) return;
+    state.hideLinkSuggestions?.();
     const filePath = file.path;
     const conversationIdBeforeSend = state.conversation.conversationId;
     const conversationId = conversationIdBeforeSend || this.newId("conversation");
@@ -734,12 +750,12 @@ export default class SolomonChatPlugin extends Plugin {
     menu.showAtPosition({ x: rect.left + Math.min(rect.width / 2, 220), y: rect.bottom });
   }
 
-  private openCreateModal(): void {
+  private openCreateModal(source?: LinkedConversationSource): void {
     new FormModal(this.app, { title: "New Solomon conversation", submitLabel: "Create", initial: { title: "", left: this.settings.defaultLeftName, right: this.settings.defaultRightName }, fields: [
       { key: "title", name: "Conversation name", placeholder: "What I need perspective on" },
       { key: "left", name: "Wise side", description: "The character or perspective giving advice." },
       { key: "right", name: "Self side", description: "Usually you." },
-    ], onSubmit: async (values) => { await this.createConversation(values.title, values.left, values.right); } }).open();
+    ], onSubmit: async (values) => { await this.createConversation(values.title, values.left, values.right, source); } }).open();
   }
 
   private openParticipantsModal(file: TFile): void {
@@ -802,14 +818,19 @@ export default class SolomonChatPlugin extends Plugin {
     }).open();
   }
 
-  private async createConversation(title: string, left: string, right: string): Promise<void> {
+  private async createConversation(title: string, left: string, right: string, source?: LinkedConversationSource): Promise<void> {
+    if (source && !isLinkedConversationSourceCurrent(source)) throw new Error("The source note changed. Close this dialog and try again from that note.");
     const folder = normalizePath(this.settings.conversationFolder || "");
     await this.ensureFolder(folder);
     const base = this.safeName(title || "New Conversation");
     const path = await this.availablePath(folder, base, ".md");
     const attachmentFolder = normalizePath(`${this.parentPath(path) ? `${this.parentPath(path)}/` : ""}${this.basename(path)}.attachments`);
     const yaml = ["---", `${FM.flag}: true`, `${FM.conversationId}: ${this.yaml(this.newId("conversation"))}`, `${FM.leftName}: ${this.yaml(left.trim() || this.settings.defaultLeftName)}`, `${FM.rightName}: ${this.yaml(right.trim() || this.settings.defaultRightName)}`, `${FM.nextSide}: right`, `${FM.attachmentFolder}: ${this.yaml(attachmentFolder)}`, "---", ""].join("\n");
+    if (source && !isLinkedConversationSourceCurrent(source)) throw new Error("The source note changed. Close this dialog and try again from that note.");
     const file = await this.app.vault.create(path, yaml);
+    if (source && !insertLinkedConversationLink(source, this.app.fileManager.generateMarkdownLink(file, source.sourcePath))) {
+      new Notice("Conversation created, but the source note changed. Its link was not inserted.");
+    }
     await this.openChatFile(file, this.app.workspace.getLeaf(false));
   }
 
@@ -1101,7 +1122,15 @@ export default class SolomonChatPlugin extends Plugin {
   }
 
   private wireLinks(container: HTMLElement, source: string): void {
-    container.querySelectorAll<HTMLAnchorElement>("a.internal-link").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); void this.app.workspace.openLinkText(link.dataset.href || link.getAttribute("href") || "", source, event.ctrlKey || event.metaKey); }));
+    this.refreshLinkStates(container, source);
+    container.querySelectorAll<HTMLAnchorElement>("a.internal-link").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); void this.app.workspace.openLinkText(link.dataset.href || link.getAttribute("href") || "", source, event.ctrlKey || event.metaKey); }));
+  }
+
+  private refreshLinkStates(container: HTMLElement, source: string): void {
+    container.querySelectorAll<HTMLAnchorElement>("a.internal-link").forEach(link => {
+      const path = getLinkpath(link.dataset.href || link.getAttribute("href") || "");
+      link.classList.toggle("is-unresolved", !!path && !this.app.metadataCache.getFirstLinkpathDest(path, source));
+    });
   }
 
   private iconButton(parent: HTMLElement, icon: string, label: string, action: () => void): HTMLButtonElement {
